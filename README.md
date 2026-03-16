@@ -307,6 +307,16 @@ claude:
     key: ""                   # Your Anthropic API key
 ```
 
+## Security Warning
+
+This pipeline runs Claude CLI with `permission_mode: "bypassPermissions"` (configured in `config.yaml`). This means the agent can read, write, and execute files on your system **without asking for confirmation**. While this is necessary for unattended multi-agent operation, it carries inherent security risks — the agent has unrestricted access to your filesystem and can execute arbitrary commands during its run.
+
+**Recommendations:**
+- Review the prompts in `prompts/` before running to understand what the agents are instructed to do.
+- Run the pipeline in an isolated environment (e.g., a container or VM) when possible.
+- Avoid running on machines with sensitive credentials or data that the agent should not access.
+- Monitor the agent logs (`AUTO_RUN_LOG.txt`) during execution.
+
 ## Architecture
 
 ```
