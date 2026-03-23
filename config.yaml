@@ -6,7 +6,7 @@ claude:
   permission_mode: "bypassPermissions"
 
   # Choose ONE provider: "subscription", "bedrock", or "api_key"
-  provider: "bedrock"
+  provider: "subscription"
 
   # --- Option 1: Claude subscription (Pro/Max) ---
   # No API key needed. Model is a shorthand: "opus", "sonnet", "haiku"
