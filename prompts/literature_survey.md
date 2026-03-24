@@ -33,7 +33,7 @@ Classify the problem into exactly one of these levels:
 
 | Level | Description | Examples |
 |-------|-------------|----------|
-| **Easy** | Textbook exercise or routine application of a known theorem. A strong undergraduate could solve it in one sitting. | Direct epsilon-delta proof, straightforward induction, applying a named theorem with all hypotheses clearly satisfied |
+| **Easy** | Textbook exercise or routine application of a known theorem. A strong undergraduate could solve it in one sitting. | Direct epsilon-delta proof, straightforward induction, applying a named theorem with all hypotheses clearly satisfied | Most importantly, you are very confident that you can solve it without any literature survey and other information.
 | **Medium** | Non-trivial problem requiring clever technique selection or combining multiple ideas. Competition-level or tricky homework. | Competition problems, qualifying exam questions, problems needing a non-obvious substitution or trick |
 | **Hard** | Research-level, requires deep insight, novel combinations, or is adjacent to open problems. Even experts might need substantial time. | Research paper lemmas, problems with subtle hypotheses, problems requiring machinery from multiple subfields |
 
