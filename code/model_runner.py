@@ -145,13 +145,14 @@ async def run_gemini_agent(
     Args:
         prompt: The full prompt string to send.
         working_dir: Directory the agent operates in (cwd for subprocess).
-        gemini_config: Dict with keys: cli_path, model.
+        gemini_config: Dict with keys: cli_path, model, api_key.
         logger: Optional PipelineLogger for streaming output.
         tracker: Optional TokenTracker for recording token usage.
         call_name: Human-readable label for this call.
     """
     cli_path = gemini_config.get("cli_path", "gemini")
     model = gemini_config.get("model", "gemini-3-flash-preview")
+    api_key = gemini_config.get("api_key", "")
 
     cmd = [
         cli_path,
@@ -162,12 +163,17 @@ async def run_gemini_agent(
     ]
 
     def _call():
+        import os
+        env = os.environ.copy()
+        if api_key:
+            env["GEMINI_API_KEY"] = api_key
         return subprocess.run(
             cmd,
             capture_output=True,
             text=True,
             timeout=3600,
             cwd=working_dir,
+            env=env,
         )
 
     start = datetime.now()

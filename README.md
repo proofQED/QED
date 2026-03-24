@@ -249,6 +249,22 @@ claude:
     key: "sk-ant-..."
 ```
 
+### Gemini Provider Setup
+
+When `multi_model.enabled: true` and using Gemini for parallel proof search, if you are using Gemini through API, then you must provide a Google Gemini API key in config. Get your API key from [Google AI Studio](https://makersuite.google.com/app/apikey).
+
+```yaml
+gemini:
+  cli_path: "gemini"
+  model: "gemini-3.1-pro-preview"
+  api_key: "your-gemini-api-key-here"
+```
+
+The pipeline will set the `GEMINI_API_KEY` environment variable automatically when calling the Gemini CLI.
+
+### Codex Provider Setup
+When `multi_model.enabled: true` and using Codex for parallel proof search, you don't need to put api key of codex in config, even if you are using Codex through API. Just make sure you can call codex CLI.
+
 ## Installation
 
 ```bash
@@ -278,6 +294,7 @@ pip install agent-framework --pre
 #    - Set Claude provider (subscription/bedrock/api_key)
 #    - Set multi_model.enabled to true/false
 #    - Configure codex/gemini sections if using multi-model
+#    - Set gemini.api_key if using Gemini (get key from Google AI Studio)
 
 # 7. Run the smoke test to verify everything works
 conda activate agent
@@ -420,6 +437,7 @@ codex:
 gemini:
   cli_path: "gemini"
   model: "gemini-3.1-pro-preview"  # or "gemini-3-flash-preview"
+  api_key: ""                      # Google Gemini API key (required for Gemini CLI)
 ```
 
 ## Security Warning

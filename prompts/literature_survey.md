@@ -119,6 +119,11 @@ Search your knowledge deeply and write to `{related_info_dir}/related_theorems.m
    - What hypotheses, if dropped, would make the statement false? Give explicit counterexamples.
    - This helps the proof agent understand which hypotheses are essential.
 
+5. **Most important: paper list with names**
+   - What are the link and paper name with short description of the paper that is highly related to this problem?
+   - Make sure you have done a very serious effort in finding the related paper.
+
+
 ---
 
 ## Output Requirements
@@ -129,7 +134,7 @@ Create the directory `{related_info_dir}/` if it does not exist, and write these
 |------|----------|
 | `{related_info_dir}/difficulty_evaluation.md` | Difficulty classification (Easy/Medium/Hard) with justification — **always written first** |
 | `{related_info_dir}/problem_analysis.md` | Problem classification, key objects, edge cases |
-| `{related_info_dir}/related_theorems.md` | Applicable theorems, related results, useful lemmas, counterexamples |
+| `{related_info_dir}/related_theorems.md` | Applicable theorems, related results, useful lemmas, counterexamples, paper list with descriptions |
 
 **Note:** The depth of the last two files depends on the difficulty classification from Phase 0. See the branching instructions above.
 
@@ -145,7 +150,7 @@ Create this directory if it does not exist.
 
 ## Critical Instructions
 
-- **Depth over breadth.** A shallow list of 50 theorems is less useful than a deep analysis of the 5 most relevant ones. For each result you cite, explain precisely WHY it matters for THIS problem and HOW it would be used.
+- **Depth over breadth.** A shallow list of 50 theorems is less useful than a deep analysis of the 5 most relevant ones. For each result you cite, explain precisely WHY it matters for THIS problem and HOW it would be used. Same for paper selection.
 - **Be precise.** State theorems with full hypotheses. Vague references ("by a standard result...") are useless to the proof agent.
 - **Be honest about uncertainty.** If you're not sure whether a theorem applies, say so and explain what would need to be checked.
 - **Think adversarially.** Actively look for reasons the problem might be harder than it looks. The proof agent needs to know where the traps are.

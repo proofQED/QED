@@ -14,7 +14,7 @@ claude:
   permission_mode: "bypassPermissions"
 
   # Choose ONE provider: "subscription", "bedrock", or "api_key"
-  provider: "bedrock"
+  provider: "api_key"
 
   # --- Option 1: Claude subscription (Pro/Max) ---
   # No API key needed. Model is a shorthand: "opus", "sonnet", "haiku"
@@ -44,3 +44,4 @@ codex:
 gemini:
   cli_path: "gemini"
   model: "gemini-3.1-pro-preview"  # or "gemini-3-flash-preview"
+  api_key: ""  # paste your Google Gemini API key here

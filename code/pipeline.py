@@ -560,6 +560,11 @@ async def run_agent(
     if instructions:
         agent_kwargs["instructions"] = instructions
 
+    # Log starting message
+    if logger:
+        model = claude_opts.get("model", "unknown")
+        logger.log(f"[Claude] Starting {call_name} (model={model})")
+
     # Import ResultMessage to capture usage from the CLI's result event
     from agent_framework_claude._agent import ResultMessage
 
@@ -625,6 +630,11 @@ async def run_agent(
 
         if tracker:
             tracker.record(call_name or "agent", input_tokens, output_tokens, elapsed)
+
+        # Log completion message
+        if logger:
+            logger.log(f"[Claude] Completed {call_name} in {elapsed:.0f}s "
+                       f"({input_tokens} in / {output_tokens} out)")
 
         return final_text
 
