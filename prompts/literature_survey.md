@@ -58,20 +58,19 @@ Classify the problem into exactly one of these levels:
 After writing the evaluation, follow the branch that matches your classification:
 
 #### If Easy:
-Write **concise** versions of the three output files and then **stop**. Specifically:
+Write **concise** versions of the two output files and then **stop**. Specifically:
 - `problem_analysis.md`: 1-2 paragraphs covering classification, key objects, and any edge cases. No need for exhaustive subsections.
 - `related_theorems.md`: State the 1-3 directly applicable theorems with their conditions. Skip "Closely Related Results", "Counterexamples to Watch For", etc.
-- `proof_strategies.md`: State the recommended approach in 1-2 paragraphs. Skip "Likely Dead Ends" and "Analogous Proofs" subsections.
 
-Then you are done. Do not execute Phases 1-3 below.
+Then you are done. Do not execute Phases 1-2 below.
 
 #### If Medium:
-Execute Phases 1-3 below, but at **moderate depth**:
+Execute Phases 1-2 below, but at **moderate depth**:
+- In Phase 1: Focus on classification and key objects. Write edge cases briefly.
 - In Phase 2: Focus on "Directly Applicable Theorems" and "Useful Lemmas". Write "Closely Related Results" briefly. Skip "Counterexamples to Watch For" unless something important comes to mind.
-- In Phase 3: Focus on "Candidate Proof Techniques" and "Recommended Attack Plan". Skip "Likely Dead Ends" unless there's an obvious trap worth mentioning.
 
 #### If Hard:
-Execute the **full survey** as written in Phases 1-3 below. Hold nothing back — the proof agent will need every advantage.
+Execute the **full survey** as written in Phases 1-2 below. Hold nothing back — the proof agent will need every advantage.
 
 ---
 
@@ -122,34 +121,6 @@ Search your knowledge deeply and write to `{related_info_dir}/related_theorems.m
 
 ---
 
-## Phase 3: Proof Strategy Analysis
-
-Think about HOW to prove this and write to `{related_info_dir}/proof_strategies.md`:
-
-1. **Candidate Proof Techniques**
-   - List every proof technique that could plausibly work, ordered by likelihood of success.
-   - For each technique, explain:
-     - Why it might work for this problem (what structural features of the problem match this technique)
-     - What the key difficulty or obstacle would be
-     - Whether you've seen this technique applied to similar problems
-
-2. **Analogous Proofs**
-   - Describe proofs of analogous or related results that could serve as templates.
-   - What was the key insight or trick in each analogous proof?
-   - How would the argument need to be adapted for this problem?
-
-3. **Likely Dead Ends**
-   - What approaches seem tempting but are likely to fail? Why?
-   - What are the classic traps for this type of problem?
-   - This saves the proof agent from wasting rounds on doomed approaches.
-
-4. **Recommended Attack Plan**
-   - If you were to attempt this proof, what would you try first, second, third?
-   - What intermediate results or lemmas should be established first?
-   - What is the most promising high-level proof skeleton?
-
----
-
 ## Output Requirements
 
 Create the directory `{related_info_dir}/` if it does not exist, and write these files:
@@ -159,9 +130,10 @@ Create the directory `{related_info_dir}/` if it does not exist, and write these
 | `{related_info_dir}/difficulty_evaluation.md` | Difficulty classification (Easy/Medium/Hard) with justification — **always written first** |
 | `{related_info_dir}/problem_analysis.md` | Problem classification, key objects, edge cases |
 | `{related_info_dir}/related_theorems.md` | Applicable theorems, related results, useful lemmas, counterexamples |
-| `{related_info_dir}/proof_strategies.md` | Candidate techniques, analogous proofs, dead ends, recommended plan |
 
-**Note:** The depth of the last three files depends on the difficulty classification from Phase 0. See the branching instructions above.
+**Note:** The depth of the last two files depends on the difficulty classification from Phase 0. See the branching instructions above.
+
+**Important:** Do NOT write proof strategies, proof plans, or attack plans. Your job is purely to survey the mathematical landscape. The proof search agent will decide how to attack the problem based on your survey.
 
 ## Temporary Files
 

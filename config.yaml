@@ -1,12 +1,20 @@
 pipeline:
   max_proof_iterations: 9
 
+  # Multi-model parallel proof search.
+  # When enabled: hard problems run Claude + Codex + Gemini in parallel each round,
+  #   with a selector agent picking the best proof. (3x cost per round)
+  # When disabled: hard problems use Claude only (same as easy/medium). No selector needed.
+  multi_model:
+    enabled: true              # set to false to use Claude-only for all difficulties
+    difficulty_threshold: "hard"  # "hard" or "medium" — problems at or above this trigger multi-model
+
 claude:
   cli_path: "claude"
   permission_mode: "bypassPermissions"
 
   # Choose ONE provider: "subscription", "bedrock", or "api_key"
-  provider: "subscription"
+  provider: "bedrock"
 
   # --- Option 1: Claude subscription (Pro/Max) ---
   # No API key needed. Model is a shorthand: "opus", "sonnet", "haiku"
@@ -21,5 +29,18 @@ claude:
 
   # --- Option 3: Anthropic API key ---
   api_key:
-    model: "claude-opus-4-6-20250609"
+    model: "claude-opus-4-6"
     key: ""  # paste your Anthropic API key here
+
+# --- Codex (OpenAI) ---
+# Used for parallel proof search on hard problems when multi_model is enabled.
+codex:
+  cli_path: "codex"
+  model: "gpt-5.4"
+  reasoning_effort: "xhigh"
+
+# --- Gemini (Google) ---
+# Used for parallel proof search on hard problems when multi_model is enabled.
+gemini:
+  cli_path: "gemini"
+  model: "gemini-3.1-pro-preview"  # or "gemini-3-flash-preview"

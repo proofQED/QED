@@ -25,9 +25,8 @@ Before this proof search began, an expert literature survey was conducted. The r
 This directory contains:
 - `problem_analysis.md` — problem classification, key objects, edge cases
 - `related_theorems.md` — applicable theorems, related results, useful lemmas, counterexamples
-- `proof_strategies.md` — candidate techniques, analogous proofs, dead ends, recommended attack plan
 
-**Read these files before starting your proof.** They contain critical intelligence about which approaches are most likely to succeed and which are dead ends.
+**Read these files before starting your proof.** They contain critical intelligence gathered from a literature survey — similar problems, applicable theorems, and known results that may inform your approach.
 
 ### Current Proof Draft
 
@@ -46,7 +45,7 @@ This proof search runs in multiple rounds. This is round {round_num}.
 {previous_round_instructions}
 - Use this information to pick up where the previous round left off and try **different** strategies.
 - **Search online for related work.** At the beginning of every round, use web search to look for related theorems, techniques, papers, or forum discussions (e.g., Math StackExchange, MathOverflow, ArXiv, Wikipedia) that may be relevant to the problem. Base your search queries on the previous round's status log — focus on the approaches that failed, the specific steps that were hard, and the techniques that were attempted. This way your searches are targeted rather than generic. Even if a literature survey was done earlier, new queries informed by what was actually tried (and what went wrong) may surface results the initial survey missed. Spend a few minutes on this before diving into proof writing.
-- **Check for human guidance.** Read any files in `/home/cyanz/lean/proof_agent/human_help/` if the directory exists and is non-empty. A human may have left hints, suggestions, corrections, or opinions about the problem or about previous proof attempts. This input can be extremely valuable — a single human observation can unlock an approach you hadn't considered or point out a subtle error in your reasoning. Treat human guidance seriously, but still verify any claims independently.
+- **Check for human guidance.** Read any files in `{human_help_dir}` if the directory exists and is non-empty. A human may have left hints, suggestions, corrections, or opinions about the problem or about previous proof attempts. This input can be extremely valuable — a single human observation can unlock an approach you hadn't considered or point out a subtle error in your reasoning. Treat human guidance seriously, but still verify any claims independently.
 
 ### At the END of your round:
 - **You MUST save a complete proof status log** to `{proof_status_file}`.

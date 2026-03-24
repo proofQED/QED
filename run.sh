@@ -9,6 +9,12 @@ OUTPUT_DIR="${2:-$SCRIPT_DIR/proof_output}"
 CONFIG="$SCRIPT_DIR/config.yaml"
 
 echo "============================================================"
+echo "  Running smoke tests..."
+echo "============================================================"
+"$PYTHON" "$SCRIPT_DIR/code/smoke_test.py" --config "$CONFIG"
+echo ""
+
+echo "============================================================"
 echo "  Proof Agent Pipeline"
 echo "============================================================"
 echo "  Problem:  $PROBLEM_FILE"
