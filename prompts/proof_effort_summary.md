@@ -78,6 +78,7 @@ If you encounter any errors during this call — tool failures, runtime exceptio
 
 ## Critical Instructions
 
+- **If any tool or script you run takes longer than 3 minutes, stop it and try a different approach or skip that computation.**
 - **Read all the files** before writing. Don't guess — base every claim on what's actually in the generated files.
 - **Be honest about the result.** If the proof has gaps, say so clearly. If it's correct, say so confidently.
 - **Be concise but complete.** A reader should get the full picture in under 5 minutes of reading.

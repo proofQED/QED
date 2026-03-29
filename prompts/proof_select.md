@@ -86,6 +86,7 @@ If you encounter any errors during this call — tool failures, runtime exceptio
 
 ## Important
 
+- **If any tool or script you run takes longer than 3 minutes, stop it and try a different approach or skip that computation.**
 - You MUST read all three verification reports before making your selection.
 - You MUST write the selection file — do not just output your answer to stdout.
 - The `SELECTED:` line must contain exactly one of: `claude`, `codex`, `gemini` (lowercase).

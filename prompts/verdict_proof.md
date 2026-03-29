@@ -18,6 +18,7 @@ Reply with ONLY the single word **'CONTINUE'** otherwise.
 
 ## Important
 
+- **If any tool or script you run takes longer than 3 minutes, stop it and try a different approach or skip that computation.**
 - Your response must be exactly one word: either `DONE` or `CONTINUE`
 - Do not include any explanation or additional text
 - If the verification result file is empty or missing, reply `CONTINUE`

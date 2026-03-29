@@ -158,6 +158,7 @@ Create this directory if it does not exist.
 
 ## Critical Instructions
 
+- **If any tool or script you run takes longer than 3 minutes, stop it and try a different approach or skip that computation.**
 - **Depth over breadth.** A shallow list of 50 theorems is less useful than a deep analysis of the 5 most relevant ones. For each result you cite, explain precisely WHY it matters for THIS problem and HOW it would be used. Same for paper selection.
 - **Be precise.** State theorems with full hypotheses. Vague references ("by a standard result...") are useless to the proof agent.
 - **Be honest about uncertainty.** If you're not sure whether a theorem applies, say so and explain what would need to be checked.

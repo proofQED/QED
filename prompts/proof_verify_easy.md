@@ -132,6 +132,8 @@ You have access to a shell. Use code to spot-check at least one key claim. Save 
 
 Write large results to files in `{output_dir}/tmp/` and print only summaries or booleans.
 
+**If any tool or script you run takes longer than 3 minutes, stop it and try a different approach or skip that computation.**
+
 ## Critical Instructions
 
 - This is an easy problem — be efficient, but still be correct.

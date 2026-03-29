@@ -154,6 +154,7 @@ For each miniclaim, extract:
 
 ## Critical Instructions
 
+- **If any tool or script you run takes longer than 3 minutes, stop it and try a different approach or skip that computation.**
 - **Decompose only — do NOT verify.** You are building a map of the proof's structure, not judging whether it is correct. Do not assign PASS/FAIL verdicts.
 - **Go maximally fine-grained.** If in doubt whether to split a step into two miniclaims, split it.
 - **Quote exactly.** Miniproofs must be verbatim quotes from the proof text.

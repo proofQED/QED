@@ -253,6 +253,8 @@ if diff != 0:
 
 **Don't be shy about using tools.** A 5-line Python script that confirms (or refutes) a key step is worth more than 20 minutes of manual algebra. If one tool doesn't work well for your problem, try another.
 
+**If any tool or script you run takes longer than 3 minutes, stop it and try a different approach or skip that computation.**
+
 ## Important Notes
 
 - If you are refining a previous draft, read the previous verification result to understand what was wrong.
