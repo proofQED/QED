@@ -1852,15 +1852,13 @@ async def main():
     # Multi-model proof search setup (providers already determined above)
     # -------------------------------------------------------
     multi_model_config = None
-    if mm_cfg.get("enabled", False) and len(proof_providers) > 1:
+    if mm_cfg.get("enabled", False) and proof_providers:
         multi_model_config = {
             "providers": proof_providers,
             "config": config,
         }
         print(f"  Multi-model proof search: ACTIVE")
         print(f"  Proof search providers: {', '.join(proof_providers)}")
-    elif mm_cfg.get("enabled", False):
-        print("  Multi-model proof search: DISABLED (only one provider available)")
 
     # -------------------------------------------------------
     # Multi-verifier setup (providers already determined above)
