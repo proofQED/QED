@@ -311,9 +311,7 @@ async def run_smoke_test(config: dict, config_path: str | None = None) -> bool:
         prompt = load_prompt(
             prompts_dir, "proof_select.md",
             problem_file="/tmp/test_problem.tex",
-            verify_claude="/tmp/round_1/claude/verification_result.md",
-            verify_codex="/tmp/round_1/codex/verification_result.md",
-            verify_gemini="/tmp/round_1/gemini/verification_result.md",
+            verification_reports_block="**Claude's proof verification(s):**\n- `/tmp/round_1/claude/verification_result.md`",
             proof_claude="/tmp/round_1/claude/proof.md",
             proof_codex="/tmp/round_1/codex/proof.md",
             proof_gemini="/tmp/round_1/gemini/proof.md",
@@ -323,6 +321,20 @@ async def run_smoke_test(config: dict, config_path: str | None = None) -> bool:
         check("proof_select.md renders OK", "selection" in prompt.lower())
     except Exception as e:
         check("proof_select.md renders OK", False, str(e))
+
+    # -------------------------------------------------------
+    # Test 7b: Verification agents config validation
+    # -------------------------------------------------------
+    va_cfg = pipeline_cfg.get("verification_agents", {})
+    if va_cfg.get("enabled", False):
+        va_providers = va_cfg.get("providers", ["claude"])
+        valid_names = {"claude", "codex", "gemini"}
+        all_valid = all(p in valid_names for p in va_providers)
+        check("verification_agents.providers valid",
+              all_valid, f"Invalid providers: {va_providers}")
+    else:
+        check("verification_agents config present (disabled OK)",
+              True, "verification_agents not enabled — Claude-only verification")
 
     # -------------------------------------------------------
     # Test 8: Multi-model connectivity (when enabled)

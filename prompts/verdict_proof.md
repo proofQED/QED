@@ -1,6 +1,6 @@
 # Verdict Task: Proof Verification
 
-> **Agentic task.** Read the input file first, then evaluate. The input file path is at the end of this prompt.
+> **Agentic task.** Read the input file(s) first, then evaluate. The input file path(s) are at the end of this prompt.
 
 ## Decision Criteria
 
@@ -26,6 +26,10 @@ Reply with ONLY the single word **'CONTINUE'** otherwise.
 
 ---
 
-## HERE IS THE INPUT FILE PATH:
+## HERE ARE THE INPUT FILE PATH(S):
 
-Read the verification result file at `{verification_result_file}`.
+Read ALL verification result file(s) listed below. If there are multiple files,
+each is an independent verification of the same proof by a different agent.
+**If ANY verification report has Overall Verdict = FAIL, reply CONTINUE.**
+
+{verification_result_file}

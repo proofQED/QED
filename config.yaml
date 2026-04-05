@@ -22,6 +22,16 @@ pipeline:
     enabled: false              # set to false to use Claude-only for all difficulties
     difficulty_threshold: "hard"  # "hard" or "medium" — problems at or above this trigger multi-model
 
+  # Multi-model verification.
+  # When enabled, each proof is independently verified by all listed providers.
+  # If ANY verifier's report says FAIL, the verdict is CONTINUE.
+  # Independent of multi_model (proof search) setting above.
+  # Cost scales linearly: 2 verifiers = 2x verification cost, 3 = 3x.
+  # In parallel proof-search mode (multi_model), cost is proof_agents × verifiers.
+  verification_agents:
+    enabled: false              # false = Claude-only verification (backward compat)
+    providers: ["claude"]       # any subset of ["claude", "codex", "gemini"]
+
 claude:
   cli_path: "claude"
   permission_mode: "bypassPermissions"

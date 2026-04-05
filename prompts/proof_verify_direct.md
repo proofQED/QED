@@ -103,6 +103,7 @@ Printing large expressions to stdout wastes your context window. Write large res
 - A proof that is "almost right" is still FAIL. Mathematical proofs are either correct or incorrect.
 - If you find the proof is correct, say so clearly with a PASS verdict.
 - **Use computational tools to independently verify steps.** Don't just read the proof — test it.
+- **Always check if an induced theorem statement is correctly stated if it is from other place, like external published work. False statements might be produced.**
 - **Whenever you feel you verified something, save your partial progress to the file!**
 
 ---

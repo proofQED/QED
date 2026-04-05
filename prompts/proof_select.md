@@ -47,11 +47,7 @@ The original problem is located at:
 
 ### Verification Reports
 
-Three independent verification reports are available:
-
-- **Claude's proof verification:** `{verify_claude}`
-- **Codex's proof verification:** `{verify_codex}`
-- **Gemini's proof verification:** `{verify_gemini}`
+{verification_reports_block}
 
 ### Proof Files
 

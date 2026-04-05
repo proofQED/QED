@@ -111,12 +111,67 @@ def check_multi_model_providers(config: dict) -> list[str]:
     return providers
 
 
+def check_verification_providers(config: dict) -> list[str]:
+    """Return available verification providers from config.
+
+    Reads config["pipeline"]["verification_agents"]. When disabled or absent,
+    returns ["claude"]. Otherwise filters the requested list to CLIs that are
+    actually installed. Always returns at least ["claude"].
+    """
+    va_cfg = config.get("pipeline", {}).get("verification_agents", {})
+    if not va_cfg.get("enabled", False):
+        return ["claude"]
+    requested = va_cfg.get("providers", ["claude"])
+    available = []
+    for name in requested:
+        if name == "claude":
+            available.append("claude")
+            continue
+        cli = config.get(name, {}).get("cli_path", name)
+        if shutil.which(cli) is not None:
+            available.append(name)
+        else:
+            print(f"  WARNING: '{cli}' CLI not found — {name} excluded from verification")
+    return available or ["claude"]
+
+
+def _verification_filename(verifier: str, multi_verifier: bool) -> str:
+    """Return the verification result filename for *verifier*.
+
+    When *multi_verifier* is True the verifier name is appended as a suffix
+    (e.g. ``verification_result_codex.md``). When False the plain name
+    ``verification_result.md`` is returned for backward compatibility.
+    """
+    if multi_verifier:
+        return f"verification_result_{verifier}.md"
+    return "verification_result.md"
+
+
 def _file_nonempty(path: str) -> bool:
     """Return True if *path* exists and has non-whitespace content."""
     if not os.path.exists(path):
         return False
     with open(path) as f:
         return bool(f.read().strip())
+
+
+def _find_verification_files(directory: str) -> list[str]:
+    """Find all verification result files in *directory*.
+
+    Returns the single-file name if it exists, otherwise all multi-verifier
+    files matching ``verification_result_<provider>.md``.
+    """
+    single = os.path.join(directory, "verification_result.md")
+    if _file_nonempty(single):
+        return [single]
+    files = []
+    if os.path.isdir(directory):
+        for name in sorted(os.listdir(directory)):
+            if name.startswith("verification_result_") and name.endswith(".md"):
+                path = os.path.join(directory, name)
+                if _file_nonempty(path):
+                    files.append(path)
+    return files
 
 
 def _check_expected_files(
@@ -318,7 +373,7 @@ def detect_resume_state(output_dir: str, skip_decomposition: bool = False) -> tu
                 models_with_proof.append(m)
             if _file_nonempty(os.path.join(mdir, "proof_decomposition.md")):
                 models_with_decomp.append(m)
-            if _file_nonempty(os.path.join(mdir, "verification_result.md")):
+            if _find_verification_files(mdir):
                 models_with_verify.append(m)
 
         if len(models_with_verify) >= len(models_with_proof) and models_with_verify:
@@ -353,7 +408,7 @@ def detect_resume_state(output_dir: str, skip_decomposition: bool = False) -> tu
     # ====== Single-model (easy/medium) round ======
     status_ok = _file_nonempty(os.path.join(last_dir, "proof_status.md"))
     decomp_ok = _file_nonempty(os.path.join(last_dir, "proof_decomposition.md"))
-    verify_ok = _file_nonempty(os.path.join(last_dir, "verification_result.md"))
+    verify_ok = bool(_find_verification_files(last_dir))
 
     if skip_decomposition:
         # No decomposition file expected — only check proof_status and verification
@@ -711,6 +766,77 @@ async def run_agent_for_verdict(
     return "CONTINUE"
 
 
+async def _run_multi_verification(
+    *,
+    verifiers: list[str],
+    prompt_template: str,
+    prompt_kwargs: dict,
+    base_dir: str,
+    prompts_dir: str,
+    config: dict,
+    claude_opts: dict,
+    logger,
+    tracker,
+    call_name_prefix: str,
+    round_num: int,
+) -> list[str]:
+    """Run verification across multiple providers in parallel.
+
+    For each verifier in *verifiers*, loads *prompt_template*, sets the
+    output file to a per-verifier filename inside *base_dir*, and dispatches
+    the call via ``run_model()`` (Claude/Codex/Gemini).
+
+    When only one verifier is requested the output filename is the backward-
+    compatible ``verification_result.md``; with multiple verifiers the files
+    are named ``verification_result_<provider>.md``.
+
+    Returns a list of verification result file paths that were created.
+    """
+    import asyncio as _asyncio
+    from model_runner import run_model
+
+    multi = len(verifiers) > 1
+    result_files: list[str] = []
+
+    async def _verify_with(verifier: str):
+        vf_name = _verification_filename(verifier, multi)
+        vf_path = os.path.join(base_dir, vf_name)
+
+        # Build per-verifier error file name
+        base_err = prompt_template.replace("proof_verify", "error_proof_verify")
+        if multi:
+            err_name = base_err.replace(".md", f"_{verifier}.md")
+        else:
+            err_name = base_err
+        err_path = os.path.join(base_dir, err_name)
+
+        kwargs = dict(prompt_kwargs)
+        kwargs["output_file"] = vf_path
+        kwargs["error_file"] = err_path
+
+        verify_prompt = load_prompt(prompts_dir, prompt_template, **kwargs)
+        verify_prompt += (
+            f"\n\nThis is round {round_num}. "
+            f"Write results to {vf_path}."
+        )
+
+        cn = f"{call_name_prefix} [{verifier}]" if multi else call_name_prefix
+
+        response = await run_model(
+            verifier, verify_prompt, kwargs.get("output_dir", base_dir), config,
+            claude_opts=claude_opts, logger=logger, tracker=tracker,
+            call_name=cn,
+        )
+        _fallback_save_response(response, [vf_path], [err_path],
+                                logger, step_name=cn)
+        _check_expected_files([(vf_path, f"{verifier} verification result")],
+                              logger, cn)
+        result_files.append(vf_path)
+
+    await _asyncio.gather(*[_verify_with(v) for v in verifiers])
+    return result_files
+
+
 # ---------------------------------------------------------------------------
 # Literature survey
 # ---------------------------------------------------------------------------
@@ -783,6 +909,7 @@ async def _run_parallel_round(
     human_help_dir: str,
     resume_from_step: str = "proof_search",
     skip_decomposition: bool = False,
+    verification_providers: list[str] | None = None,
 ) -> str:
     """Execute one parallel round for hard-mode. Returns 'DONE' or 'CONTINUE'.
 
@@ -792,6 +919,10 @@ async def _run_parallel_round(
     """
     import asyncio as _asyncio
     from model_runner import run_model
+
+    if verification_providers is None:
+        verification_providers = ["claude"]
+    multi_verifier = len(verification_providers) > 1
 
     round_dir = os.path.join(verify_dir, f"round_{i}")
     providers = available_providers  # e.g. ["claude", "codex", "gemini"]
@@ -944,7 +1075,7 @@ async def _run_parallel_round(
         logger.append_history(f"Iteration {i}: Parallel decomposition completed")
 
     # ==================================================================
-    # Step 3 (or 2 if skip_decomposition): PARALLEL VERIFICATION (all Claude)
+    # Step 3 (or 2 if skip_decomposition): PARALLEL VERIFICATION
     # ==================================================================
     step += 1
     if skip_verification:
@@ -952,52 +1083,47 @@ async def _run_parallel_round(
         logger.append_history(f"Iteration {i}: Parallel verification SKIPPED (resume)")
     else:
         verify_label = "direct" if skip_decomposition else "full"
+        verifier_names = ", ".join(verification_providers)
         logger.update_status(i, max_iterations, f"{step}/{total_steps} Parallel Verification ({verify_label})", "RUNNING",
-                             f"Verifying {len(providers)} proofs in parallel (Claude)...")
-        logger.append_history(f"Iteration {i}: Parallel verification started ({verify_label})")
+                             f"Verifying {len(providers)} proofs × {len(verification_providers)} verifiers...")
+        logger.append_history(f"Iteration {i}: Parallel verification started ({verify_label}, verifiers: {verifier_names})")
 
-        async def _verify(provider):
-            mdir = model_dirs[provider]
+        async def _verify_proof_for_model(proof_provider):
+            mdir = model_dirs[proof_provider]
             m_proof = os.path.join(mdir, "proof.md")
-            m_verify = os.path.join(mdir, "verification_result.md")
 
             if skip_decomposition:
-                verify_prompt = load_prompt(
-                    prompts_dir, "proof_verify_direct.md",
+                template = "proof_verify_direct.md"
+                kwargs = dict(
                     problem_file=problem_file,
                     proof_file=m_proof,
-                    output_file=m_verify,
                     output_dir=output_dir,
-                    error_file=os.path.join(mdir, "error_proof_verify_direct.md"),
                 )
             else:
                 m_decomp = os.path.join(mdir, "proof_decomposition.md")
-                verify_prompt = load_prompt(
-                    prompts_dir, "proof_verify.md",
+                template = "proof_verify.md"
+                kwargs = dict(
                     problem_file=problem_file,
                     proof_file=m_proof,
                     decomposition_file=m_decomp,
-                    output_file=m_verify,
                     output_dir=output_dir,
-                    error_file=os.path.join(mdir, "error_proof_verify.md"),
                 )
-            verify_prompt += f"\n\nThis is round {i}. Verifying {provider}'s proof. Write to {m_verify}."
-            response = await run_agent(claude_opts, verify_prompt, logger,
-                                       tracker=tracker, call_name=f"Verification R{i} [{provider}]")
-            err_name_inner = "error_proof_verify_direct.md" if skip_decomposition else "error_proof_verify.md"
-            _fallback_save_response(response,
-                [os.path.join(mdir, "verification_result.md")],
-                [os.path.join(mdir, err_name_inner)],
-                logger, step_name=f"Verification R{i} [{provider}]")
 
-        await _asyncio.gather(*[_verify(p) for p in providers])
-        err_name = "error_proof_verify_direct.md" if skip_decomposition else "error_proof_verify.md"
-        for p in providers:
-            mdir = model_dirs[p]
-            _check_expected_files([
-                (os.path.join(mdir, "verification_result.md"), f"{p} verification result"),
-                (os.path.join(mdir, err_name), f"{p} error log"),
-            ], logger, f"Parallel Verification R{i} [{p}]")
+            await _run_multi_verification(
+                verifiers=verification_providers,
+                prompt_template=template,
+                prompt_kwargs=kwargs,
+                base_dir=mdir,
+                prompts_dir=prompts_dir,
+                config=config,
+                claude_opts=claude_opts,
+                logger=logger,
+                tracker=tracker,
+                call_name_prefix=f"Verification R{i} [{proof_provider}]",
+                round_num=i,
+            )
+
+        await _asyncio.gather(*[_verify_proof_for_model(p) for p in providers])
         logger.append_history(f"Iteration {i}: Parallel verification completed")
 
     # ==================================================================
@@ -1009,22 +1135,29 @@ async def _run_parallel_round(
                          "Selecting best proof from verification reports...")
     logger.append_history(f"Iteration {i}: Proof selection started")
 
-    # Build paths for selector prompt — handle missing providers gracefully
-    verify_paths = {}
+    # Build dynamic verification reports block for selector prompt
+    block_lines = []
     proof_paths = {}
     for m in ("claude", "codex", "gemini"):
         mdir = os.path.join(round_dir, m)
-        vf = os.path.join(mdir, "verification_result.md")
         pf = os.path.join(mdir, "proof.md")
-        verify_paths[m] = vf if os.path.exists(vf) else "(not available — model not used)"
         proof_paths[m] = pf if os.path.exists(pf) else "(not available — model not used)"
+        if not os.path.isdir(mdir):
+            block_lines.append(f"- **{m.title()}'s proof verification:** (not available — model not used)")
+            continue
+        vfiles = _find_verification_files(mdir)
+        if vfiles:
+            block_lines.append(f"**{m.title()}'s proof verification(s):**")
+            for vf in vfiles:
+                block_lines.append(f"- `{vf}`")
+        else:
+            block_lines.append(f"- **{m.title()}'s proof verification:** (not available)")
+    verification_reports_block = "\n".join(block_lines)
 
     select_prompt = load_prompt(
         prompts_dir, "proof_select.md",
         problem_file=problem_file,
-        verify_claude=verify_paths["claude"],
-        verify_codex=verify_paths["codex"],
-        verify_gemini=verify_paths["gemini"],
+        verification_reports_block=verification_reports_block,
         proof_claude=proof_paths["claude"],
         proof_codex=proof_paths["codex"],
         proof_gemini=proof_paths["gemini"],
@@ -1057,18 +1190,29 @@ async def _run_parallel_round(
         shutil.copy2(selected_proof, proof_file)
 
     # ==================================================================
-    # Step 6 (or 5): VERDICT AGENT (Claude) — uses ONLY selected verification
+    # Step 6 (or 5): VERDICT AGENT (Claude) — uses selected model's verification(s)
     # ==================================================================
     step += 1
-    selected_verify = os.path.join(round_dir, selected_model, "verification_result.md")
+    selected_mdir = os.path.join(round_dir, selected_model)
+    verification_files = _find_verification_files(selected_mdir)
+    if not verification_files:
+        # Fallback — should not happen if verification ran successfully
+        verification_files = [os.path.join(selected_mdir, "verification_result.md")]
     logger.update_status(i, max_iterations, f"{step}/{total_steps} Checking Verdict", "RUNNING",
                          "Analyzing selected verification results...")
-    logger.append_history(f"Iteration {i}: Checking verdict (using {selected_model}'s verification)")
+    logger.append_history(f"Iteration {i}: Checking verdict (using {selected_model}'s verification, {len(verification_files)} report(s))")
 
-    verdict_prompt = load_prompt(
-        prompts_dir, "verdict_proof.md",
-        verification_result_file=selected_verify,
-    )
+    if len(verification_files) == 1:
+        verdict_prompt = load_prompt(
+            prompts_dir, "verdict_proof.md",
+            verification_result_file=f"Read the verification result file at `{verification_files[0]}`.",
+        )
+    else:
+        files_list = "\n".join(f"- `{f}`" for f in verification_files)
+        verdict_prompt = load_prompt(
+            prompts_dir, "verdict_proof.md",
+            verification_result_file=files_list,
+        )
     decision = await run_agent_for_verdict(claude_opts, verdict_prompt, logger,
                                            tracker=tracker, call_name=f"Verdict R{i}")
     logger.log(f"Iteration {i}: Decision is {decision}")
@@ -1104,6 +1248,8 @@ async def run_proof_loop(
     difficulty: str = "unknown",
     multi_model_config: dict | None = None,
     skip_decomposition: bool = False,
+    verification_providers: list[str] | None = None,
+    config: dict | None = None,
 ) -> bool:
     """Run the proof search/decomposition/verification/verdict loop.
 
@@ -1128,6 +1274,10 @@ async def run_proof_loop(
 
     Returns True if successful (DONE), False if max iterations reached.
     """
+    if verification_providers is None:
+        verification_providers = ["claude"]
+    multi_verifier = len(verification_providers) > 1
+
     easy_mode = (difficulty == "easy")
     hard_parallel = (
         multi_model_config is not None
@@ -1153,20 +1303,23 @@ async def run_proof_loop(
     if start_round > 1 and resume_from_step == "proof_search":
         prev_complete = start_round - 1
         prev_round_dir = os.path.join(verify_dir, f"round_{prev_complete}")
-        # Check single-model verification or parallel selection
-        prev_verify_file = os.path.join(prev_round_dir, "verification_result.md")
-        if not os.path.exists(prev_verify_file) and _is_parallel_round(prev_round_dir):
-            # For parallel rounds, check if selected model's verification passed
+        # Find verification files — single-model or parallel
+        prev_verify_files = _find_verification_files(prev_round_dir)
+        if not prev_verify_files and _is_parallel_round(prev_round_dir):
+            # For parallel rounds, check selected model's verification(s)
             selected = _parse_selected_model(
                 os.path.join(prev_round_dir, "selection.md"),
                 multi_model_config.get("providers", ["claude"]) if multi_model_config else ["claude"],
             )
-            prev_verify_file = os.path.join(prev_round_dir, selected, "verification_result.md")
-        if _file_nonempty(prev_verify_file):
-            verdict = _parse_verdict_from_file(prev_verify_file)
-            logger.log(f"\n--- Resuming: round {prev_complete} verdict from file = {verdict} ---")
-            logger.append_history(f"Resume: parsed verdict for round {prev_complete} = {verdict}")
-            if verdict == "PASS":
+            prev_verify_files = _find_verification_files(os.path.join(prev_round_dir, selected))
+        if prev_verify_files:
+            # All verification files must be PASS for the round to count as done
+            verdicts = [_parse_verdict_from_file(f) for f in prev_verify_files]
+            all_pass = all(v == "PASS" for v in verdicts)
+            verdict_str = "PASS" if all_pass else "FAIL"
+            logger.log(f"\n--- Resuming: round {prev_complete} verdict from file(s) = {verdict_str} ({len(prev_verify_files)} report(s)) ---")
+            logger.append_history(f"Resume: parsed verdict for round {prev_complete} = {verdict_str}")
+            if all_pass:
                 logger.finalize(prev_complete, max_iterations, "FINISHED",
                                 "Proof already verified in previous run!")
                 logger.append_history("SUCCESS - Proof already verified (resume check)")
@@ -1208,6 +1361,7 @@ async def run_proof_loop(
                 human_help_dir=human_help_dir,
                 resume_from_step=round_resume,
                 skip_decomposition=skip_decomposition,
+                verification_providers=verification_providers,
             )
 
             if decision == "DONE":
@@ -1221,9 +1375,8 @@ async def run_proof_loop(
             # ==============================================================
             proof_status_file = os.path.join(round_dir, "proof_status.md")
             decomp_file = os.path.join(round_dir, "proof_decomposition.md")
-            verify_result_file = os.path.join(round_dir, "verification_result.md")
 
-            prev_verify = os.path.join(verify_dir, f"round_{i-1}", "verification_result.md")
+            prev_verify_files_list = _find_verification_files(os.path.join(verify_dir, f"round_{i-1}"))
             prev_proof_status = os.path.join(verify_dir, f"round_{i-1}", "proof_status.md")
 
             # Determine which steps to skip for this round (resume case)
@@ -1242,8 +1395,8 @@ async def run_proof_loop(
             else:
                 # Build previous-round instructions
                 prev_instructions = ""
-                if os.path.exists(prev_verify):
-                    prev_instructions += f"- Read the PREVIOUS round's verification result from {prev_verify}.\n"
+                for pvf in prev_verify_files_list:
+                    prev_instructions += f"- Read the PREVIOUS round's verification result from {pvf}.\n"
                 if os.path.exists(prev_proof_status):
                     prev_instructions += f"- Read the PREVIOUS round's proof status from {prev_proof_status}. It contains which approaches were tried and FAILED — do NOT repeat these.\n"
                 if not prev_instructions:
@@ -1290,28 +1443,27 @@ async def run_proof_loop(
                 # ==============================================================
 
                 # Step 2/3: Easy Verification
-                logger.update_status(i, max_iterations, "2/3 Verification (easy)", "RUNNING", "Running easy verification agent...")
+                verifier_label = f" ({', '.join(verification_providers)})" if multi_verifier else ""
+                logger.update_status(i, max_iterations, f"2/3 Verification (easy){verifier_label}", "RUNNING", "Running easy verification agent...")
                 logger.append_history(f"Iteration {i}: Easy verification started")
 
-                verify_prompt = load_prompt(
-                    prompts_dir, "proof_verify_easy.md",
-                    problem_file=problem_file,
-                    proof_file=proof_file,
-                    output_file=verify_result_file,
-                    output_dir=output_dir,
-                    error_file=os.path.join(round_dir, "error_proof_verify_easy.md"),
+                verification_files = await _run_multi_verification(
+                    verifiers=verification_providers,
+                    prompt_template="proof_verify_easy.md",
+                    prompt_kwargs=dict(
+                        problem_file=problem_file,
+                        proof_file=proof_file,
+                        output_dir=output_dir,
+                    ),
+                    base_dir=round_dir,
+                    prompts_dir=prompts_dir,
+                    config=config or {},
+                    claude_opts=claude_opts,
+                    logger=logger,
+                    tracker=tracker,
+                    call_name_prefix=f"Verification (easy) R{i}",
+                    round_num=i,
                 )
-                verify_prompt += f"\n\nThis is round {i}. Write results to {verify_result_file}."
-
-                response = await run_agent(claude_opts, verify_prompt, logger,
-                                           tracker=tracker, call_name=f"Verification (easy) R{i}")
-                _fallback_save_response(response, [verify_result_file],
-                    [os.path.join(round_dir, "error_proof_verify_easy.md")],
-                    logger, step_name=f"Verification (easy) R{i}")
-                _check_expected_files([
-                    (verify_result_file, "verification result"),
-                    (os.path.join(round_dir, "error_proof_verify_easy.md"), "error log"),
-                ], logger, f"Verification (easy) R{i}")
                 logger.append_history(f"Iteration {i}: Easy verification completed")
 
                 # Step 3/3: Verdict
@@ -1324,28 +1476,27 @@ async def run_proof_loop(
                 # ==============================================================
 
                 # Step 2/3: Direct Verification
-                logger.update_status(i, max_iterations, "2/3 Verification (direct)", "RUNNING", "Running direct verification agent...")
+                verifier_label = f" ({', '.join(verification_providers)})" if multi_verifier else ""
+                logger.update_status(i, max_iterations, f"2/3 Verification (direct){verifier_label}", "RUNNING", "Running direct verification agent...")
                 logger.append_history(f"Iteration {i}: Direct verification started")
 
-                verify_prompt = load_prompt(
-                    prompts_dir, "proof_verify_direct.md",
-                    problem_file=problem_file,
-                    proof_file=proof_file,
-                    output_file=verify_result_file,
-                    output_dir=output_dir,
-                    error_file=os.path.join(round_dir, "error_proof_verify_direct.md"),
+                verification_files = await _run_multi_verification(
+                    verifiers=verification_providers,
+                    prompt_template="proof_verify_direct.md",
+                    prompt_kwargs=dict(
+                        problem_file=problem_file,
+                        proof_file=proof_file,
+                        output_dir=output_dir,
+                    ),
+                    base_dir=round_dir,
+                    prompts_dir=prompts_dir,
+                    config=config or {},
+                    claude_opts=claude_opts,
+                    logger=logger,
+                    tracker=tracker,
+                    call_name_prefix=f"Verification (direct) R{i}",
+                    round_num=i,
                 )
-                verify_prompt += f"\n\nThis is round {i}. Write results to {verify_result_file}."
-
-                response = await run_agent(claude_opts, verify_prompt, logger,
-                                           tracker=tracker, call_name=f"Verification (direct) R{i}")
-                _fallback_save_response(response, [verify_result_file],
-                    [os.path.join(round_dir, "error_proof_verify_direct.md")],
-                    logger, step_name=f"Verification (direct) R{i}")
-                _check_expected_files([
-                    (verify_result_file, "verification result"),
-                    (os.path.join(round_dir, "error_proof_verify_direct.md"), "error log"),
-                ], logger, f"Verification (direct) R{i}")
                 logger.append_history(f"Iteration {i}: Direct verification completed")
 
                 # Step 3/3: Verdict
@@ -1387,39 +1538,46 @@ async def run_proof_loop(
                     logger.append_history(f"Iteration {i}: Decomposition completed")
 
                 # Step 3/4: Verification
-                logger.update_status(i, max_iterations, "3/4 Verification", "RUNNING", "Running verification agent...")
+                verifier_label = f" ({', '.join(verification_providers)})" if multi_verifier else ""
+                logger.update_status(i, max_iterations, f"3/4 Verification{verifier_label}", "RUNNING", "Running verification agent...")
                 logger.append_history(f"Iteration {i}: Verification started")
 
-                verify_prompt = load_prompt(
-                    prompts_dir, "proof_verify.md",
-                    problem_file=problem_file,
-                    proof_file=proof_file,
-                    decomposition_file=decomp_file,
-                    output_file=verify_result_file,
-                    output_dir=output_dir,
-                    error_file=os.path.join(round_dir, "error_proof_verify.md"),
+                verification_files = await _run_multi_verification(
+                    verifiers=verification_providers,
+                    prompt_template="proof_verify.md",
+                    prompt_kwargs=dict(
+                        problem_file=problem_file,
+                        proof_file=proof_file,
+                        decomposition_file=decomp_file,
+                        output_dir=output_dir,
+                    ),
+                    base_dir=round_dir,
+                    prompts_dir=prompts_dir,
+                    config=config or {},
+                    claude_opts=claude_opts,
+                    logger=logger,
+                    tracker=tracker,
+                    call_name_prefix=f"Verification R{i}",
+                    round_num=i,
                 )
-                verify_prompt += f"\n\nThis is round {i}. Write results to {verify_result_file}."
-
-                response = await run_agent(claude_opts, verify_prompt, logger,
-                                           tracker=tracker, call_name=f"Verification R{i}")
-                _fallback_save_response(response, [verify_result_file],
-                    [os.path.join(round_dir, "error_proof_verify.md")],
-                    logger, step_name=f"Verification R{i}")
-                _check_expected_files([
-                    (verify_result_file, "verification result"),
-                    (os.path.join(round_dir, "error_proof_verify.md"), "error log"),
-                ], logger, f"Verification R{i}")
                 logger.append_history(f"Iteration {i}: Verification completed")
 
                 # Step 4/4: Verdict
                 logger.update_status(i, max_iterations, "4/4 Checking Verdict", "RUNNING", "Analyzing verification results...")
                 logger.append_history(f"Iteration {i}: Checking verdict")
 
-            verdict_prompt = load_prompt(
-                prompts_dir, "verdict_proof.md",
-                verification_result_file=verify_result_file,
-            )
+            # Build verdict prompt — supports single or multiple verification files
+            if len(verification_files) == 1:
+                verdict_prompt = load_prompt(
+                    prompts_dir, "verdict_proof.md",
+                    verification_result_file=f"Read the verification result file at `{verification_files[0]}`.",
+                )
+            else:
+                files_list = "\n".join(f"- `{f}`" for f in verification_files)
+                verdict_prompt = load_prompt(
+                    prompts_dir, "verdict_proof.md",
+                    verification_result_file=files_list,
+                )
             decision = await run_agent_for_verdict(claude_opts, verdict_prompt, logger,
                                                    tracker=tracker, call_name=f"Verdict R{i}")
             logger.log(f"Iteration {i}: Decision is {decision}")
@@ -1566,6 +1724,14 @@ async def main():
             print(f"  Providers: {', '.join(available_providers)}")
         else:
             print("  Multi-model mode: DISABLED (only Claude available)")
+
+    # -------------------------------------------------------
+    # Multi-verifier setup
+    # -------------------------------------------------------
+    verification_providers = check_verification_providers(config)
+    if len(verification_providers) > 1:
+        print(f"  Multi-verifier mode: ACTIVE")
+        print(f"  Verification providers: {', '.join(verification_providers)}")
     print()
 
     # -------------------------------------------------------
@@ -1594,6 +1760,8 @@ async def main():
         difficulty=difficulty,
         multi_model_config=multi_model_config,
         skip_decomposition=skip_decomp,
+        verification_providers=verification_providers,
+        config=config,
     )
 
     # -------------------------------------------------------
