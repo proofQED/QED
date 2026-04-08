@@ -261,7 +261,7 @@ The pipeline does **not** use any agent framework library. All model calls are d
 
 - **Claude:** `claude -p --output-format json --dangerously-skip-permissions --model <model> <prompt>` — JSON stdout is parsed for the response text and token usage.
 - **Codex:** `codex --search -m <model> exec --json --dangerously-bypass-approvals-and-sandbox -C <dir> <prompt>` — JSONL stdout is parsed for events.
-- **Gemini:** `gemini -m <model> -y -o json -p <prompt>` — JSON stdout is parsed for the response and token stats.
+- **Gemini:** `gemini -m <model> --approval-mode yolo -o json -p <prompt>` — JSON stdout is parsed for the response and token stats. When configured, the pipeline also injects Gemini CLI `thinkingConfig` through an isolated `settings.json`.
 
 Each call is wrapped in `asyncio.run_in_executor` so the main event loop stays non-blocking during long-running agent calls. Stderr from each CLI flows directly to the terminal for real-time progress visibility.
 
@@ -312,10 +312,12 @@ When using Gemini for proof search (listed in `multi_model.providers`) or verifi
 gemini:
   cli_path: "gemini"
   model: "gemini-3.1-pro-preview"
+  approval_mode: "yolo"
+  thinking_level: "HIGH"  # Gemini 3 reasoning strength; for Gemini 2.5 use thinking_budget
   api_key: "your-gemini-api-key-here"
 ```
 
-The pipeline will set the `GEMINI_API_KEY` environment variable automatically when calling the Gemini CLI.
+The pipeline will set the `GEMINI_API_KEY` environment variable automatically when calling the Gemini CLI. If `thinking_level` or `thinking_budget` is configured, the pipeline writes a temporary Gemini CLI `settings.json` via `GEMINI_CLI_HOME` so the subprocess uses that reasoning configuration without depending on your global Gemini settings.
 
 ### Codex Provider Setup
 
@@ -516,6 +518,8 @@ codex:
 gemini:
   cli_path: "gemini"
   model: "gemini-3.1-pro-preview"  # or "gemini-3-flash-preview"
+  approval_mode: "yolo"
+  thinking_level: "HIGH"           # Gemini 3 reasoning strength; for Gemini 2.5 use thinking_budget
   api_key: ""                      # Google Gemini API key (required for Gemini CLI)
 ```
 

@@ -21,7 +21,7 @@ pipeline:
   # Cost scales with number of providers: 2 providers = 2x proof search cost, 3 = 3x.
   multi_model:
     enabled: true               # true = use providers below, false = Claude-only
-    providers: ["claude"]  # any subset of ["claude", "codex", "gemini"]
+    providers: ["codex"]  # any subset of ["claude", "codex", "gemini"]
 
   # Multi-model verification.
   # When enabled, each proof is independently verified by all listed providers.
@@ -67,4 +67,6 @@ codex:
 gemini:
   cli_path: "gemini"
   model: "gemini-3.1-pro-preview"  # or "gemini-3-flash-preview"
-  api_key: ""  # paste your Google Gemini API key here
+  approval_mode: "yolo"
+  thinking_level: "HIGH"  # Gemini 3 thinking strength; for Gemini 2.5 use thinking_budget instead
+  api_key: "AIzaSyBjN4kQVN6ieolEd5L-cJXtEEkQFhEzpD0"  # paste your Google Gemini API key here

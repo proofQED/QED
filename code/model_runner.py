@@ -12,6 +12,7 @@ import asyncio
 import json
 import os
 import subprocess
+import tempfile
 from datetime import datetime
 
 
@@ -376,7 +377,8 @@ async def run_gemini_agent(
     Args:
         prompt: The full prompt string to send.
         working_dir: Directory the agent operates in (cwd for subprocess).
-        gemini_config: Dict with keys: cli_path, model, api_key.
+        gemini_config: Dict with keys: cli_path, model, api_key,
+            approval_mode, thinking_level, thinking_budget.
         logger: Optional PipelineLogger for streaming output.
         tracker: Optional TokenTracker for recording token usage.
         call_name: Human-readable label for this call.
@@ -384,20 +386,60 @@ async def run_gemini_agent(
     cli_path = gemini_config.get("cli_path", "gemini")
     model = gemini_config.get("model", "gemini-3-flash-preview")
     api_key = gemini_config.get("api_key", "")
+    approval_mode = gemini_config.get("approval_mode", "yolo")
+    thinking_level = gemini_config.get("thinking_level", "")
+    thinking_budget = gemini_config.get("thinking_budget")
 
     cmd = [
         cli_path,
         "-m", model,
-        "-y",           # auto-approve
+        "--approval-mode", approval_mode,
         "-o", "json",   # JSON output for metadata extraction
         "-p", prompt,
     ]
 
     def _call():
-        import os
         env = os.environ.copy()
         if api_key:
             env["GEMINI_API_KEY"] = api_key
+
+        thinking_config = {}
+        if thinking_level:
+            thinking_config["thinkingLevel"] = thinking_level
+        if thinking_budget is not None:
+            thinking_config["thinkingBudget"] = thinking_budget
+
+        if thinking_config:
+            with tempfile.TemporaryDirectory(prefix="qed-gemini-home-") as gemini_home:
+                settings_dir = os.path.join(gemini_home, ".gemini")
+                os.makedirs(settings_dir, exist_ok=True)
+                settings_path = os.path.join(settings_dir, "settings.json")
+                settings = {
+                    "modelConfigs": {
+                        "overrides": [
+                            {
+                                "match": {"model": model},
+                                "modelConfig": {
+                                    "generateContentConfig": {
+                                        "thinkingConfig": thinking_config,
+                                    }
+                                },
+                            }
+                        ]
+                    }
+                }
+                with open(settings_path, "w", encoding="utf-8") as f:
+                    json.dump(settings, f)
+                env["GEMINI_CLI_HOME"] = gemini_home
+                return subprocess.run(
+                    cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    cwd=working_dir,
+                    env=env,
+                )
+
         return subprocess.run(
             cmd,
             stdout=subprocess.PIPE,

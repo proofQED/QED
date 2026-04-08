@@ -100,11 +100,9 @@ def check_multi_model_providers(config: dict) -> list[str]:
 
     Reads config["pipeline"]["multi_model"]["providers"]. If not specified,
     defaults to all available providers (claude + any installed codex/gemini).
-    Filters the requested list to CLIs that are actually installed.
-    Always returns at least ["claude"].
+    When providers are explicitly specified, exits with error if any CLI is missing.
 
     Returns a list of available providers.
-    Prints warnings for missing CLIs but does not exit.
     """
     mm_cfg = config.get("pipeline", {}).get("multi_model", {})
     requested = mm_cfg.get("providers", None)
@@ -122,6 +120,7 @@ def check_multi_model_providers(config: dict) -> list[str]:
 
     # Filter requested providers to those that are available
     available = []
+    missing = []
     for name in requested:
         if name == "claude":
             available.append("claude")
@@ -130,8 +129,15 @@ def check_multi_model_providers(config: dict) -> list[str]:
         if shutil.which(cli) is not None:
             available.append(name)
         else:
-            print(f"  WARNING: '{cli}' CLI not found — {name} excluded from multi-model proof search")
-    return available or ["claude"]
+            missing.append(name)
+    if missing:
+        print(f"  ERROR: CLI not found for configured proof search providers: {', '.join(missing)}")
+        print(f"         Install the missing CLI(s) or remove them from multi_model.providers in config.yaml")
+        sys.exit(1)
+    if not available:
+        print(f"  ERROR: No proof search providers configured in multi_model.providers")
+        sys.exit(1)
+    return available
 
 
 def check_verification_providers(config: dict) -> list[str]:
@@ -139,13 +145,14 @@ def check_verification_providers(config: dict) -> list[str]:
 
     Reads config["pipeline"]["verification_agents"]. When disabled or absent,
     returns ["claude"]. Otherwise filters the requested list to CLIs that are
-    actually installed. Always returns at least ["claude"].
+    actually installed. Exits with error if any configured provider's CLI is missing.
     """
     va_cfg = config.get("pipeline", {}).get("verification_agents", {})
     if not va_cfg.get("enabled", False):
         return ["claude"]
     requested = va_cfg.get("providers", ["claude"])
     available = []
+    missing = []
     for name in requested:
         if name == "claude":
             available.append("claude")
@@ -154,8 +161,15 @@ def check_verification_providers(config: dict) -> list[str]:
         if shutil.which(cli) is not None:
             available.append(name)
         else:
-            print(f"  WARNING: '{cli}' CLI not found — {name} excluded from verification")
-    return available or ["claude"]
+            missing.append(name)
+    if missing:
+        print(f"  ERROR: CLI not found for configured verification providers: {', '.join(missing)}")
+        print(f"         Install the missing CLI(s) or remove them from verification_agents.providers in config.yaml")
+        sys.exit(1)
+    if not available:
+        print(f"  ERROR: No verification providers configured in verification_agents.providers")
+        sys.exit(1)
+    return available
 
 
 def _verification_filename(verifier: str, multi_verifier: bool) -> str:

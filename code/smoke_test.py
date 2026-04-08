@@ -6,6 +6,7 @@ without running the full proof loop (which is expensive).
 
 import argparse
 import asyncio
+import json
 import os
 import sys
 import tempfile
@@ -413,15 +414,54 @@ async def run_smoke_test(config: dict, config_path: str | None = None) -> bool:
             if shutil.which(gemini_cli) is not None:
                 try:
                     gemini_model = gemini_cfg.get("model", "gemini-3-flash-preview")
+                    gemini_approval_mode = gemini_cfg.get("approval_mode", "yolo")
+                    gemini_thinking_level = gemini_cfg.get("thinking_level", "")
+                    gemini_thinking_budget = gemini_cfg.get("thinking_budget")
                     gemini_env = os.environ.copy()
                     if gemini_api_key:
                         gemini_env["GEMINI_API_KEY"] = gemini_api_key
-                    gemini_result = subprocess.run(
-                        [gemini_cli, "-m", gemini_model, "-y", "-o", "json",
-                         "-p", "Reply with exactly: SMOKE_TEST_OK"],
-                        stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                        text=True, timeout=120, env=gemini_env,
-                    )
+
+                    thinking_config = {}
+                    if gemini_thinking_level:
+                        thinking_config["thinkingLevel"] = gemini_thinking_level
+                    if gemini_thinking_budget is not None:
+                        thinking_config["thinkingBudget"] = gemini_thinking_budget
+
+                    if thinking_config:
+                        with tempfile.TemporaryDirectory(prefix="qed-gemini-home-") as gemini_home:
+                            settings_dir = os.path.join(gemini_home, ".gemini")
+                            os.makedirs(settings_dir, exist_ok=True)
+                            settings_path = os.path.join(settings_dir, "settings.json")
+                            settings = {
+                                "modelConfigs": {
+                                    "overrides": [
+                                        {
+                                            "match": {"model": gemini_model},
+                                            "modelConfig": {
+                                                "generateContentConfig": {
+                                                    "thinkingConfig": thinking_config,
+                                                }
+                                            },
+                                        }
+                                    ]
+                                }
+                            }
+                            with open(settings_path, "w", encoding="utf-8") as f:
+                                json.dump(settings, f)
+                            gemini_env["GEMINI_CLI_HOME"] = gemini_home
+                            gemini_result = subprocess.run(
+                                [gemini_cli, "-m", gemini_model, "--approval-mode", gemini_approval_mode, "-o", "json",
+                                 "-p", "Reply with exactly: SMOKE_TEST_OK"],
+                                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                text=True, timeout=120, env=gemini_env,
+                            )
+                    else:
+                        gemini_result = subprocess.run(
+                            [gemini_cli, "-m", gemini_model, "--approval-mode", gemini_approval_mode, "-o", "json",
+                             "-p", "Reply with exactly: SMOKE_TEST_OK"],
+                            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                            text=True, timeout=120, env=gemini_env,
+                        )
                     check("Gemini CLI exits cleanly", gemini_result.returncode == 0,
                           f"Exit code {gemini_result.returncode}, stderr: {gemini_result.stderr[:300]}")
                     # Parse JSON response
