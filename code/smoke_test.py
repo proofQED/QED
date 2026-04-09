@@ -353,6 +353,24 @@ async def run_smoke_test(config: dict, config_path: str | None = None) -> bool:
               True, "multi_model not enabled — Claude-only proof search")
 
     # -------------------------------------------------------
+    # Test 7d: Auxiliary agent providers config validation
+    # -------------------------------------------------------
+    print("\n=== Test 7d: Auxiliary agent providers ===")
+    valid_providers = {"claude", "codex", "gemini"}
+    auxiliary_agents = [
+        ("literature_survey", "Literature Survey"),
+        ("proof_decompose", "Proof Decomposition"),
+        ("proof_select", "Proof Selection"),
+        ("proof_summary", "Proof Summary"),
+    ]
+    for agent_key, agent_name in auxiliary_agents:
+        agent_cfg = pipeline_cfg.get(agent_key, {})
+        provider = agent_cfg.get("provider", "claude")
+        is_valid = provider.lower() in valid_providers
+        check(f"{agent_key}.provider valid ({provider})",
+              is_valid, f"Invalid provider '{provider}' for {agent_name}")
+
+    # -------------------------------------------------------
     # Test 8: Non-Claude provider connectivity (when needed)
     # -------------------------------------------------------
 
@@ -372,6 +390,13 @@ async def run_smoke_test(config: dict, config_path: str | None = None) -> bool:
         for p in va_cfg.get("providers", []):
             if p != "claude":  # Claude is tested separately in Test 5
                 providers_to_test.add(p)
+
+    # From auxiliary agents
+    for agent_key, _ in auxiliary_agents:
+        agent_cfg = pipeline_cfg.get(agent_key, {})
+        provider = agent_cfg.get("provider", "claude").lower()
+        if provider != "claude":
+            providers_to_test.add(provider)
 
     if providers_to_test:
         print(f"\n=== Test 8: Non-Claude provider connectivity (testing: {', '.join(sorted(providers_to_test))}) ===")

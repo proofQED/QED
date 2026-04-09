@@ -849,6 +849,46 @@ async def run_agent_for_verdict(
     return "CONTINUE"
 
 
+async def run_auxiliary_agent(
+    provider: str,
+    prompt: str,
+    working_dir: str,
+    config: dict,
+    claude_opts: dict,
+    logger: PipelineLogger | None = None,
+    tracker: TokenTracker | None = None,
+    call_name: str = "",
+    instructions: str | None = None,
+) -> str:
+    """Run an auxiliary agent (literature survey, decomposition, selection, summary).
+
+    Dispatches to the configured provider (claude, codex, or gemini).
+    Falls back to Claude if the provider is unrecognized.
+    """
+    from model_runner import run_model
+
+    provider = provider.lower().strip()
+    if provider not in ("claude", "codex", "gemini"):
+        if logger:
+            logger.log(f"[Auxiliary] Unknown provider '{provider}', falling back to claude")
+        provider = "claude"
+
+    if logger:
+        logger.log(f"[Auxiliary] Running {call_name} with provider={provider}")
+
+    return await run_model(
+        provider=provider,
+        prompt=prompt,
+        working_dir=working_dir,
+        config=config,
+        claude_opts=claude_opts,
+        logger=logger,
+        tracker=tracker,
+        call_name=call_name,
+        instructions=instructions,
+    )
+
+
 async def _run_multi_verification(
     *,
     verifiers: list[str],
@@ -988,6 +1028,7 @@ async def run_literature_survey(
     problem_file: str,
     claude_opts: dict,
     prompts_dir: str,
+    config: dict,
     math_skill: str = "",
     tracker: TokenTracker | None = None,
 ) -> str:
@@ -1001,6 +1042,9 @@ async def run_literature_survey(
     logger = PipelineLogger(log_dir, "Literature Survey")
     logger.update_status(1, 1, "Literature Survey", "RUNNING", "Running literature survey agent...")
 
+    # Get provider from config (default to claude)
+    provider = config.get("pipeline", {}).get("literature_survey", {}).get("provider", "claude")
+
     survey_prompt = load_prompt(
         prompts_dir, "literature_survey.md",
         problem_file=problem_file,
@@ -1009,8 +1053,17 @@ async def run_literature_survey(
         error_file=os.path.join(related_info_dir, "error_literature_survey.md"),
     )
 
-    response = await run_agent(claude_opts, survey_prompt, logger, instructions=math_skill or None,
-                               tracker=tracker, call_name="Literature Survey")
+    response = await run_auxiliary_agent(
+        provider=provider,
+        prompt=survey_prompt,
+        working_dir=claude_opts.get("cwd", output_dir),
+        config=config,
+        claude_opts=claude_opts,
+        logger=logger,
+        tracker=tracker,
+        call_name="Literature Survey",
+        instructions=math_skill or None,
+    )
     _fallback_save_response(response, [
         os.path.join(related_info_dir, "difficulty_evaluation.md"),
         os.path.join(related_info_dir, "problem_analysis.md"),
@@ -1182,13 +1235,15 @@ async def _run_parallel_round(
         logger.log(f"--- Resuming round {i}: skipping decomposition (already complete) ---")
         logger.append_history(f"Iteration {i}: Parallel decomposition SKIPPED (resume)")
     else:
+        # Get decomposition provider from config (default to claude)
+        decomp_provider = config.get("pipeline", {}).get("proof_decompose", {}).get("provider", "claude")
         step += 1
         logger.update_status(i, max_iterations, f"{step}/{total_steps} Parallel Decomposition", "RUNNING",
-                             f"Decomposing {len(providers)} proofs in parallel (Claude)...")
+                             f"Decomposing {len(providers)} proofs in parallel ({decomp_provider})...")
         logger.append_history(f"Iteration {i}: Parallel decomposition started")
 
-        async def _decompose(provider):
-            mdir = model_dirs[provider]
+        async def _decompose(proof_provider):
+            mdir = model_dirs[proof_provider]
             m_proof = os.path.join(mdir, "proof.md")
             m_decomp = os.path.join(mdir, "proof_decomposition.md")
             decomp_prompt = load_prompt(
@@ -1199,13 +1254,21 @@ async def _run_parallel_round(
                 output_dir=output_dir,
                 error_file=os.path.join(mdir, "error_proof_decompose.md"),
             )
-            decomp_prompt += f"\n\nThis is round {i}. Decomposing {provider}'s proof. Write to {m_decomp}."
-            response = await run_agent(claude_opts, decomp_prompt, logger,
-                                       tracker=tracker, call_name=f"Decomposition R{i} [{provider}]")
+            decomp_prompt += f"\n\nThis is round {i}. Decomposing {proof_provider}'s proof. Write to {m_decomp}."
+            response = await run_auxiliary_agent(
+                provider=decomp_provider,
+                prompt=decomp_prompt,
+                working_dir=claude_opts.get("cwd", output_dir),
+                config=config,
+                claude_opts=claude_opts,
+                logger=logger,
+                tracker=tracker,
+                call_name=f"Decomposition R{i} [{proof_provider}]",
+            )
             _fallback_save_response(response,
                 [os.path.join(mdir, "proof_decomposition.md")],
                 [os.path.join(mdir, "error_proof_decompose.md")],
-                logger, step_name=f"Decomposition R{i} [{provider}]")
+                logger, step_name=f"Decomposition R{i} [{proof_provider}]")
 
         await _asyncio.gather(*[_decompose(p) for p in providers])
         for p in providers:
@@ -1296,6 +1359,9 @@ async def _run_parallel_round(
             block_lines.append(f"- **{m.title()}'s proof verification:** (not available)")
     verification_reports_block = "\n".join(block_lines)
 
+    # Get selector provider from config (default to claude)
+    select_provider = config.get("pipeline", {}).get("proof_select", {}).get("provider", "claude")
+
     select_prompt = load_prompt(
         prompts_dir, "proof_select.md",
         problem_file=problem_file,
@@ -1306,8 +1372,16 @@ async def _run_parallel_round(
         selection_file=selection_file,
         error_file=os.path.join(round_dir, "error_proof_select.md"),
     )
-    response = await run_agent(claude_opts, select_prompt, logger,
-                               tracker=tracker, call_name=f"Proof Selection R{i}")
+    response = await run_auxiliary_agent(
+        provider=select_provider,
+        prompt=select_prompt,
+        working_dir=claude_opts.get("cwd", output_dir),
+        config=config,
+        claude_opts=claude_opts,
+        logger=logger,
+        tracker=tracker,
+        call_name=f"Proof Selection R{i}",
+    )
     _fallback_save_response(response, [selection_file],
         [os.path.join(round_dir, "error_proof_select.md")],
         logger, step_name=f"Proof Selection R{i}")
@@ -1653,7 +1727,9 @@ async def run_proof_loop(
                     logger.log(f"--- Resuming round {i}: skipping decomposition (already complete) ---")
                     logger.append_history(f"Iteration {i}: Decomposition SKIPPED (resume)")
                 else:
-                    logger.update_status(i, max_iterations, "2/4 Decomposition", "RUNNING", "Running decomposition agent...")
+                    # Get decomposition provider from config (default to claude)
+                    decomp_provider = (config or {}).get("pipeline", {}).get("proof_decompose", {}).get("provider", "claude")
+                    logger.update_status(i, max_iterations, "2/4 Decomposition", "RUNNING", f"Running decomposition agent ({decomp_provider})...")
                     logger.append_history(f"Iteration {i}: Decomposition started")
 
                     decomp_prompt = load_prompt(
@@ -1666,8 +1742,16 @@ async def run_proof_loop(
                     )
                     decomp_prompt += f"\n\nThis is round {i}. Write decomposition to {decomp_file}."
 
-                    response = await run_agent(claude_opts, decomp_prompt, logger,
-                                               tracker=tracker, call_name=f"Decomposition R{i}")
+                    response = await run_auxiliary_agent(
+                        provider=decomp_provider,
+                        prompt=decomp_prompt,
+                        working_dir=claude_opts.get("cwd", output_dir),
+                        config=config or {},
+                        claude_opts=claude_opts,
+                        logger=logger,
+                        tracker=tracker,
+                        call_name=f"Decomposition R{i}",
+                    )
                     _fallback_save_response(response, [decomp_file],
                         [os.path.join(round_dir, "error_proof_decompose.md")],
                         logger, step_name=f"Decomposition R{i}")
@@ -1754,7 +1838,8 @@ async def main():
     pipeline_cfg = config.get("pipeline", {})
     claude_cfg = config.get("claude", {})
     max_proof = pipeline_cfg.get("max_proof_iterations", 9)
-    skip_decomp = pipeline_cfg.get("skip_decomposition", False)
+    # proof_decompose.enabled=true means run decomposition, so skip_decomp is the inverse
+    skip_decomp = not pipeline_cfg.get("proof_decompose", {}).get("enabled", True)
 
     problem_file = os.path.abspath(args.input)
     output_dir = os.path.abspath(args.output)
@@ -1848,7 +1933,7 @@ async def main():
         print("=" * 60)
         related_info_dir = await run_literature_survey(
             output_dir, problem_file, claude_opts, prompts_dir,
-            math_skill=proving_skill, tracker=tracker,
+            config=config, math_skill=proving_skill, tracker=tracker,
         )
         print(f"  Survey saved to: {related_info_dir}")
 
@@ -1941,7 +2026,10 @@ async def main():
 
         summary_log_dir = os.path.join(output_dir, "summary_log")
         summary_logger = PipelineLogger(summary_log_dir, "Proof Effort Summary")
-        summary_logger.update_status(1, 1, "Summary", "RUNNING", "Writing proof effort summary...")
+
+        # Get summary provider from config (default to claude)
+        summary_provider = config.get("pipeline", {}).get("proof_summary", {}).get("provider", "claude")
+        summary_logger.update_status(1, 1, "Summary", "RUNNING", f"Writing proof effort summary ({summary_provider})...")
 
         summary_prompt = load_prompt(
             prompts_dir, "proof_effort_summary.md",
@@ -1952,8 +2040,16 @@ async def main():
             summary_file=summary_file,
             error_file=os.path.join(output_dir, "error_proof_effort_summary.md"),
         )
-        response = await run_agent(claude_opts, summary_prompt, logger=summary_logger,
-                                    tracker=tracker, call_name="Proof Effort Summary")
+        response = await run_auxiliary_agent(
+            provider=summary_provider,
+            prompt=summary_prompt,
+            working_dir=claude_opts.get("cwd", output_dir),
+            config=config,
+            claude_opts=claude_opts,
+            logger=summary_logger,
+            tracker=tracker,
+            call_name="Proof Effort Summary",
+        )
         _fallback_save_response(response, [summary_file],
             [os.path.join(output_dir, "error_proof_effort_summary.md")],
             summary_logger, step_name="Proof Effort Summary")
