@@ -1158,7 +1158,13 @@ async def _run_parallel_round(
     )
     skip_verification = resume_from_step == "parallel_selection"
 
-    total_steps = 5 if skip_decomposition else 6
+    single_provider = len(providers) == 1
+    # When only one provider, skip selector agent (steps: search, [decompose], verify, copy, verdict)
+    # When multiple providers: search, [decompose], verify, select, copy, verdict
+    if single_provider:
+        total_steps = 4 if skip_decomposition else 5
+    else:
+        total_steps = 5 if skip_decomposition else 6
     step = 0
 
     # ==================================================================
@@ -1332,64 +1338,72 @@ async def _run_parallel_round(
         logger.append_history(f"Iteration {i}: Parallel verification completed")
 
     # ==================================================================
-    # Step 4 (or 3): SELECTOR AGENT (Claude)
+    # Step 4 (or 3): SELECTOR AGENT — only when multiple providers
     # ==================================================================
-    step += 1
     selection_file = os.path.join(round_dir, "selection.md")
-    logger.update_status(i, max_iterations, f"{step}/{total_steps} Proof Selection", "RUNNING",
-                         "Selecting best proof from verification reports...")
-    logger.append_history(f"Iteration {i}: Proof selection started")
 
-    # Build dynamic verification reports block for selector prompt
-    block_lines = []
-    proof_paths = {}
-    for m in ("claude", "codex", "gemini"):
-        mdir = os.path.join(round_dir, m)
-        pf = os.path.join(mdir, "proof.md")
-        proof_paths[m] = pf if os.path.exists(pf) else "(not available — model not used)"
-        if not os.path.isdir(mdir):
-            block_lines.append(f"- **{m.title()}'s proof verification:** (not available — model not used)")
-            continue
-        vfiles = _find_verification_files(mdir)
-        if vfiles:
-            block_lines.append(f"**{m.title()}'s proof verification(s):**")
-            for vf in vfiles:
-                block_lines.append(f"- `{vf}`")
-        else:
-            block_lines.append(f"- **{m.title()}'s proof verification:** (not available)")
-    verification_reports_block = "\n".join(block_lines)
+    if single_provider:
+        # Single provider: skip selector agent entirely, use the only provider
+        selected_model = providers[0]
+        logger.log(f"--- Round {i}: skipping proof selection (single provider: {selected_model}) ---")
+        logger.append_history(f"Iteration {i}: Proof selection SKIPPED (single provider: {selected_model})")
+    else:
+        step += 1
+        logger.update_status(i, max_iterations, f"{step}/{total_steps} Proof Selection", "RUNNING",
+                             "Selecting best proof from verification reports...")
+        logger.append_history(f"Iteration {i}: Proof selection started")
 
-    # Get selector provider from config (default to claude)
-    select_provider = config.get("pipeline", {}).get("proof_select", {}).get("provider", "claude")
+        # Build dynamic verification reports block for selector prompt
+        block_lines = []
+        proof_paths = {}
+        for m in ("claude", "codex", "gemini"):
+            mdir = os.path.join(round_dir, m)
+            pf = os.path.join(mdir, "proof.md")
+            proof_paths[m] = pf if os.path.exists(pf) else "(not available — model not used)"
+            if not os.path.isdir(mdir):
+                block_lines.append(f"- **{m.title()}'s proof verification:** (not available — model not used)")
+                continue
+            vfiles = _find_verification_files(mdir)
+            if vfiles:
+                block_lines.append(f"**{m.title()}'s proof verification(s):**")
+                for vf in vfiles:
+                    block_lines.append(f"- `{vf}`")
+            else:
+                block_lines.append(f"- **{m.title()}'s proof verification:** (not available)")
+        verification_reports_block = "\n".join(block_lines)
 
-    select_prompt = load_prompt(
-        prompts_dir, "proof_select.md",
-        problem_file=problem_file,
-        verification_reports_block=verification_reports_block,
-        proof_claude=proof_paths["claude"],
-        proof_codex=proof_paths["codex"],
-        proof_gemini=proof_paths["gemini"],
-        selection_file=selection_file,
-        error_file=os.path.join(round_dir, "error_proof_select.md"),
-    )
-    response = await run_auxiliary_agent(
-        provider=select_provider,
-        prompt=select_prompt,
-        working_dir=claude_opts.get("cwd", output_dir),
-        config=config,
-        claude_opts=claude_opts,
-        logger=logger,
-        tracker=tracker,
-        call_name=f"Proof Selection R{i}",
-    )
-    _fallback_save_response(response, [selection_file],
-        [os.path.join(round_dir, "error_proof_select.md")],
-        logger, step_name=f"Proof Selection R{i}")
-    _check_expected_files([
-        (selection_file, "selection report"),
-        (os.path.join(round_dir, "error_proof_select.md"), "error log"),
-    ], logger, f"Proof Selection R{i}")
-    logger.append_history(f"Iteration {i}: Proof selection completed")
+        # Get selector provider from config (default to claude)
+        select_provider = config.get("pipeline", {}).get("proof_select", {}).get("provider", "claude")
+
+        select_prompt = load_prompt(
+            prompts_dir, "proof_select.md",
+            problem_file=problem_file,
+            verification_reports_block=verification_reports_block,
+            proof_claude=proof_paths["claude"],
+            proof_codex=proof_paths["codex"],
+            proof_gemini=proof_paths["gemini"],
+            selection_file=selection_file,
+            error_file=os.path.join(round_dir, "error_proof_select.md"),
+        )
+        response = await run_auxiliary_agent(
+            provider=select_provider,
+            prompt=select_prompt,
+            working_dir=claude_opts.get("cwd", output_dir),
+            config=config,
+            claude_opts=claude_opts,
+            logger=logger,
+            tracker=tracker,
+            call_name=f"Proof Selection R{i}",
+        )
+        _fallback_save_response(response, [selection_file],
+            [os.path.join(round_dir, "error_proof_select.md")],
+            logger, step_name=f"Proof Selection R{i}")
+        _check_expected_files([
+            (selection_file, "selection report"),
+            (os.path.join(round_dir, "error_proof_select.md"), "error log"),
+        ], logger, f"Proof Selection R{i}")
+        logger.append_history(f"Iteration {i}: Proof selection completed")
+        selected_model = _parse_selected_model(selection_file, providers)
 
     # ==================================================================
     # Step 5 (or 4): Copy selected proof to main proof.md
@@ -1397,7 +1411,6 @@ async def _run_parallel_round(
     step += 1
     logger.update_status(i, max_iterations, f"{step}/{total_steps} Applying Selection", "RUNNING",
                          "Copying selected proof to main proof.md...")
-    selected_model = _parse_selected_model(selection_file, providers)
     logger.log(f"Iteration {i}: Selected model = {selected_model}")
     logger.append_history(f"Iteration {i}: Selected model = {selected_model}")
 

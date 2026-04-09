@@ -45,7 +45,6 @@ A proof is ONLY valuable if it tackles the hardest part head-on. The hard part i
 
 **Remember: the verification agent WILL catch hand-waving, and the round will be wasted. It is far better to write a proof that is incomplete but honest about its gaps than one that pretends to be complete but hides the hard parts behind "clearly" and "obviously". A failed round where you genuinely engaged with the difficulty teaches the next round something. A failed round where you dodged the difficulty teaches nothing.**
 
-**⚠️ Your proof will be decomposed and checked at every level of detail.** After you write your proof, a separate decomposition agent will break it into its smallest atomic claims (miniclaims) — every single equality, inequality, implication, case, and algebraic step becomes its own numbered item. Then a verification agent will check each miniclaim independently using both logical analysis and computational tools (SymPy, Z3, numerical tests). It will also verify that groups of miniclaims actually prove the intermediate results they claim to, and that those intermediate results compose correctly to prove the final conclusion. There is nowhere to hide: every "clearly", every "it follows that", every implicit step will be surfaced and individually scrutinized. If you hand-wave even one step, it will be isolated, flagged, and the entire round will fail. Write every step as if it will be read in isolation and challenged — because it will be.
 
 ## CRITICAL: Do NOT Alter the Problem Statement
 
@@ -73,31 +72,10 @@ Write (or refine) a complete mathematical proof and save it to `{proof_file}`.
 3. **Clarity**: The proof should be clear and well-organized. Use standard mathematical writing conventions.
 4. **Self-contained**: The proof should be readable on its own (the reader has access to the problem statement).
 
-## Workflow
-
-### Step 1: Understand the Problem
-- Read `{problem_file}` carefully.
-- Identify what needs to be proved: Is it an existence claim, a universal statement, an equality, an inequality, an equivalence?
-- Identify all hypotheses and what structure the given objects have.
-
-### Step 2: Plan the Proof Strategy
-- What is the high-level approach? (Direct proof, contradiction, contrapositive, induction, construction, case analysis, etc.)
-- What are the key lemmas or intermediate results needed?
-- Are there well-known theorems or techniques that apply?
-
-### Step 3: Write the Proof
-- Write the proof step by step in `{proof_file}`.
-- Justify every non-trivial claim.
-- If you use a well-known theorem, state it clearly.
-
-### Step 4: Self-Check
-- Re-read the proof. Does every step follow logically from previous steps and the hypotheses?
-- Are there any gaps? Any unjustified claims?
-- Does the proof actually prove what was asked?
 
 ## Use Computational Tools Freely
 
-You have access to a shell and can run code. **Use computational tools aggressively** to explore, verify, and support your proof work. Do not rely solely on mental calculation — write and run scripts whenever they can help. Save scripts and their output in `{output_dir}/tmp/`.
+You have access to a shell and can run code. **Use computational tools when needed** to explore, verify, and support your proof work. Do not rely solely on mental calculation — write and run scripts whenever they can help. Save scripts and their output in `{output_dir}/tmp/`.
 
 ### ⚠️ Keep tool output concise
 
@@ -110,17 +88,6 @@ Printing large symbolic expressions, matrices, or long lists to stdout wastes yo
 - **For loops/enumerations:** print only the final conclusion, not every iteration.
 - **For plots:** save to file in `{output_dir}/tmp/`, don't try to display.
 
-### Recommended tools and when to use them:
-
-| Tool | Install | Best for |
-|------|---------|----------|
-| **SymPy** (Python) | `pip install sympy` | Symbolic algebra, simplification, solving equations, summation identities, limits, integrals, series expansions, polynomial factoring, checking identities |
-| **SageMath** | `sage` (if available) | Number theory, combinatorics, group theory, algebraic geometry, exact arithmetic, exploring conjectures over finite fields/groups |
-| **NumPy / SciPy** | `pip install numpy scipy` | Numerical spot-checks, matrix computations, eigenvalue verification, numerical integration to sanity-check analytic results |
-| **Matplotlib** | `pip install matplotlib` | Plotting functions/sequences to build geometric intuition, visualizing convergence behavior, spotting patterns |
-| **Z3** (SMT solver) | `pip install z3-solver` | Checking satisfiability of logical/arithmetic constraints, automated verification of small finite cases, finding counterexamples |
-| **itertools / math** | (stdlib) | Brute-force enumeration of small cases, combinatorial checks, exact integer/rational arithmetic |
-| **Mathematica** | `wolfram-script` (if available) | Symbolic computation, closed-form solutions, special function identities |
 
 ### When to reach for a tool:
 
@@ -141,6 +108,101 @@ Printing large symbolic expressions, matrices, or long lists to stdout wastes yo
 
 - If you are refining a previous draft, read the previous verification result to understand what was wrong.
 - Focus on mathematical rigor. A proof that is "mostly right" is not a proof.
+
+## CRITICAL: Strict Citation Format for External Results and Citations
+
+This is a research proof task. Do not reprove well-known results unnecessarily. When using any standard theorem, lemma, proposition, corollary, definition, or other established result from the literature, cite it explicitly instead of reproving it, whenever appropriate.
+
+Every external mathematical result used in the proof must be cited using exactly one citation block of the following form:
+
+<cite>type=TYPE; label=LABEL; title=TITLE; authors=AUTHORS; source_url=URL; verifier_locator=EXACT_LOCATOR; statement_match=exact; statement=EXACT_STATEMENT_FROM_SOURCE; usage=EXACTLY_HOW_IT_IS_USED_HERE</cite>
+
+No other citation format is allowed.
+
+### Field meanings
+
+- `TYPE`: theorem, lemma, proposition, corollary, definition, remark, section, chapter, or other
+- `LABEL`: the exact theorem / lemma / proposition / corollary / definition number in the source, or `unlabeled`
+- `TITLE`: the exact title of the cited paper or book
+- `AUTHORS`: the author list
+- `source_url`: a direct and stable link to the cited source, such as an arXiv page, DOI page, publisher page, project page, or stable online copy
+- `verifier_locator`: a precise locator sufficient for an independent verifier to find the exact cited statement directly in the source without guessing
+- `statement_match`: must always be `exact`
+- `statement`: the exact mathematical statement from the cited source that is being imported
+- `usage`: a precise sentence stating exactly how that cited statement is used in the current proof
+
+### Exact-statement rule
+
+A citation is valid only if the cited source contains the exact same mathematical statement being used in the proof.
+
+- Do NOT cite a stronger theorem and specialize it.
+- Do NOT cite an equivalent reformulation.
+- Do NOT cite a related statement that is merely similar.
+- Do NOT paraphrase the cited result loosely.
+- Do NOT cite a source unless you have checked that the cited statement matches exactly.
+- If the exact statement cannot be found in a source, then do not cite it as external support. Instead, prove it directly or record the gap honestly in the proof status log.
+
+### Verifier-locator rule
+
+The `verifier_locator` must be specific enough that a separate verifier, using only the citation block and the cited source, can locate the exact referenced statement directly and unambiguously.
+
+Acceptable examples:
+- `Theorem 2.4, p. 17`
+- `Lemma 5.1, p. 43`
+- `Chapter III, Proposition 9.3, pp. 121-122`
+- `Section 4, displayed theorem beginning "Let X be a normal variety...", p. 28`
+
+Unacceptable examples:
+- `see Section 3`
+- `see the introduction`
+- `around page 20`
+- `Hartshorne chapter III`
+- `arXiv paper`
+
+If the source has numbered results, include the exact result number.  
+Include page number(s) whenever possible.  
+If the source is an arXiv paper, include the exact arXiv URL and the exact theorem / lemma number and page number if available.  
+If the source is a book, include a stable source URL whenever available, plus chapter / section / result number / page number.
+
+### Source-link rule
+
+Every citation must include `source_url`.
+
+- For arXiv papers, use the exact arXiv URL.
+- For books, use a stable accessible URL whenever available.
+- If no stable public full-text URL is available for a book, use the best available stable source page, such as a DOI page or publisher page.
+- Do not invent links.
+- Do not omit the link field.
+
+### Usage rule
+
+The `usage` field must state exactly what role the cited statement plays in the present proof.
+
+Good examples:
+- `usage=Used exactly as stated to conclude that f is continuous on [a,b].`
+- `usage=Used exactly as stated to deduce existence of a weakly convergent subsequence.`
+- `usage=Used exactly as stated to identify the dimension of H^0(X,L).`
+
+Bad examples:
+- `usage=standard fact`
+- `usage=used here`
+- `usage=for the next step`
+
+### One-citation-per-result rule
+
+Each `<cite>...</cite>` block must correspond to exactly one imported result.  
+If multiple external results are used, create separate citation blocks.
+
+### No fake citations
+
+- Do not invent theorem numbers, page numbers, titles, author names, or URLs.
+- Do not cite a source you have not actually checked.
+- Do not output a citation block unless all fields are filled with real information.
+- If some source metadata truly cannot be found, do not guess. Either locate another source, prove the claim directly, or record the issue honestly in the proof status log.
+
+### Proof-writing policy
+
+The proof should focus on the genuinely problem-specific and nontrivial parts of the argument. Standard background results should be cited using the required `<cite>...</cite>` format rather than reproved. However, every new reduction, delicate step, or nonstandard argument must still be proved fully and explicitly.
 
 ---
 
