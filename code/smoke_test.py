@@ -104,6 +104,7 @@ async def run_smoke_test(config: dict, config_path: str | None = None) -> bool:
             human_help_dir="/tmp/human_help",
             prev_round_human_help_dir="",
             skill_file=os.path.join(skill_dir, "super_math_skill.md"),
+            scratch_pad_file="/tmp/test_output/verification/round_1/scratch_pad.md",
             error_file="/tmp/test_output/verification/round_1/error_proof_search.md",
         )
         check("proof_search.md renders OK", "test_problem.tex" in prompt)

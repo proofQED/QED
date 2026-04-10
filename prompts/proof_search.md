@@ -439,6 +439,16 @@ Include:
 
 Log **every approach you tried and why it failed or succeeded**. This file is the **primary way the next round learns what happened**. If you don't log your failed approaches, the next round will waste time repeating the same mistakes.
 
+### Scratch Pad
+
+Use the scratch pad to record your thinking throughout the round — strategies you're considering, intermediate calculations, key observations, dead ends, and insights. **Write to this file frequently as you work**, not just at the end.
+
+```
+{scratch_pad_file}
+```
+
+This file serves as a live log of your reasoning process. It helps you organize your thoughts and allows the human monitoring the run to see what you're working on in real time. Write informally — this is your working notebook, not a polished document.
+
 ### Error Log
 
 If you encounter any errors during this call — tool failures, runtime exceptions, file I/O issues, context window limits, or unexpected behavior — record them in:

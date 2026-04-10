@@ -1210,6 +1210,7 @@ async def _run_parallel_round(
                 human_help_dir=human_help_dir,
                 prev_round_human_help_dir=prev_round_human_help_dir,
                 skill_file=os.path.join(os.path.dirname(prompts_dir), "skill", "super_math_skill.md"),
+                scratch_pad_file=os.path.join(mdir, "scratch_pad.md"),
                 error_file=os.path.join(mdir, "error_proof_search.md"),
             )
             search_prompt += (
@@ -1725,6 +1726,7 @@ async def run_proof_loop(
                     human_help_dir=human_help_dir,
                     prev_round_human_help_dir=prev_round_hh_dir,
                     skill_file=os.path.join(os.path.dirname(prompts_dir), "skill", "super_math_skill.md"),
+                    scratch_pad_file=os.path.join(round_dir, "scratch_pad.md"),
                     error_file=os.path.join(round_dir, "error_proof_search.md"),
                 )
                 search_prompt += f"\n\nThis is round {i}. Write or refine the proof. If one approach doesn't work after much effort, try a completely different proof strategy."
