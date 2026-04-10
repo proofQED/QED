@@ -1102,6 +1102,7 @@ async def _run_parallel_round(
     config: dict,
     available_providers: list[str],
     human_help_dir: str,
+    prev_round_human_help_dir: str = "",
     resume_from_step: str = "proof_search",
     skip_decomposition: bool = False,
     verification_providers: list[str] | None = None,
@@ -1199,6 +1200,7 @@ async def _run_parallel_round(
                 proof_status_file=m_status,
                 previous_round_instructions=prev_instructions,
                 human_help_dir=human_help_dir,
+                prev_round_human_help_dir=prev_round_human_help_dir,
                 skill_file=os.path.join(os.path.dirname(prompts_dir), "skill", "super_math_skill.md"),
                 error_file=os.path.join(mdir, "error_proof_search.md"),
             )
@@ -1556,6 +1558,19 @@ async def run_proof_loop(
         round_dir = os.path.join(verify_dir, f"round_{i}")
         os.makedirs(round_dir, exist_ok=True)
 
+        # Create per-round human_help directory with empty file
+        round_hh_dir = os.path.join(round_dir, "human_help")
+        os.makedirs(round_hh_dir, exist_ok=True)
+        round_hh_file = os.path.join(round_hh_dir, "human_help.md")
+        if not os.path.exists(round_hh_file):
+            with open(round_hh_file, "w") as f:
+                f.write("")
+
+        # Previous round's human_help (read by this round's proof search)
+        prev_round_hh_dir = os.path.join(verify_dir, f"round_{i-1}", "human_help")
+        if i == 1 or not os.path.isdir(prev_round_hh_dir):
+            prev_round_hh_dir = ""
+
         logger.log(f"\n========================================")
         logger.log(f"=== ITERATION {i} of {max_iterations} ===")
         logger.log(f"========================================")
@@ -1586,6 +1601,7 @@ async def run_proof_loop(
                 config=multi_model_config["config"],
                 available_providers=multi_model_config["providers"],
                 human_help_dir=human_help_dir,
+                prev_round_human_help_dir=prev_round_hh_dir,
                 resume_from_step=round_resume,
                 skip_decomposition=skip_decomposition,
                 verification_providers=verification_providers,
@@ -1647,6 +1663,7 @@ async def run_proof_loop(
                     proof_status_file=proof_status_file,
                     previous_round_instructions=prev_instructions,
                     human_help_dir=human_help_dir,
+                    prev_round_human_help_dir=prev_round_hh_dir,
                     skill_file=os.path.join(os.path.dirname(prompts_dir), "skill", "super_math_skill.md"),
                     error_file=os.path.join(round_dir, "error_proof_search.md"),
                 )

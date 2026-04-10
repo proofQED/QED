@@ -33,12 +33,12 @@ The pipeline runs in three stages. All model invocations are done by spawning CL
 
 Model selection is **solely determined by configuration** — the `multi_model.providers` list controls which models run proof search, and `verification_agents.providers` controls which models run verification. Difficulty classification affects only the survey depth and verification thoroughness, not which models are used.
 
-**Multi-model proof search + multi-model verification — 5 or 6 steps per round (parallel):**
+**Multi-model proof search + multi-model verification — 4 to 6 steps per round (parallel):**
 
 1. **Proof Search (parallel)** — All configured proof search providers (any subset of Claude, Codex, Gemini) attack the problem simultaneously. Each writes its own `proof.md` in an isolated subdirectory.
 2. **Decomposition (parallel)** — Claude decomposes all proofs into numbered **miniclaims** with dependency graphs. One decomposition per model's proof. *(Skipped when `skip_decomposition: true`)*
 3. **Verification (parallel, multi-verifier)** — Each proof is independently verified by ALL configured verification providers. For N proofs and M verifiers, this produces N×M verification reports. Each verification result is saved as `verification_result_<verifier>.md` in the respective proof subdirectory.
-4. **Selector Agent** — Reads all verification reports across all proofs and verifiers. Selects the single most promising proof based on: unanimous verifier agreement, problem-statement integrity, overall verdict, fewest failures, quality of partial progress, and structural completeness. A proof needs PASS from ALL verifiers to be considered fully verified. Writes `selection.md`.
+4. **Selector Agent** — Reads all verification reports across all proofs and verifiers. Selects the single most promising proof based on: unanimous verifier agreement, problem-statement integrity, overall verdict, fewest failures, quality of partial progress, and structural completeness. A proof needs PASS from ALL verifiers to be considered fully verified. Writes `selection.md`. *(Skipped when only one proof search provider is configured — the single proof is used directly.)*
 5. **Apply Selection** — The winning proof is copied to the main `proof.md`.
 6. **Verdict Agent** — Reads all verification reports for the selected proof and returns `DONE` only if ALL verifiers passed, otherwise `CONTINUE`.
 
@@ -61,7 +61,24 @@ If the verdict is `DONE`, the pipeline stops. Otherwise the next round begins, w
 
 All agents receive `skill/super_math_skill.md` as a system-level instruction — a guide to mathematical proof methodology covering proof orientation, core strategies, stuck-recovery tactics, self-checking discipline, and computational tool usage. The proof search agent also receives the skill file path as an explicit input (`{skill_file}`) so it can reference the strategies directly.
 
-**Human guidance.** You can drop hints, suggestions, or corrections into `human_help/` at any time during a run. The proof search agent checks this directory at the start of every round.
+**Structured tags.** The proof search agent is required to use two structured tag formats in the proof, which the verification agent checks:
+
+- **`<cite>...</cite>`** — Every external mathematical result (theorem, lemma, etc.) must be cited with a structured block containing: type, label, title, authors, source URL, verifier locator, exact statement, and usage. The verification agent independently checks each citation's faithfulness — fetching the source URL, verifying the statement matches, and confirming the result is correctly applied.
+- **`<key-original-step>...</key-original-step>`** — Every nontrivial, original step in the proof (novel reductions, hard estimates, key constructions) must be wrapped in this tag. The content inside must be maximally detailed with no hand-waving. The verification agent independently identifies which steps it considers nontrivial and flags mismatches: untagged hard steps (prover hiding difficulty) or inflated tags (prover tagging routine steps as key).
+
+**Verification phases.** Direct verification (`proof_verify_direct.md`) follows a 4-phase structure:
+
+1. **Phase 1: Problem-Statement Integrity** — Word-by-word comparison of the original problem vs. what the proof claims to prove.
+2. **Phase 2: Citation Verification** — Checks every `<cite>` block for correct format, then independently verifies faithfulness (URL works, statement matches source, usage is correct). Models routinely hallucinate citations.
+3. **Phase 3: Logical Step Verification** — Fine-grained step-by-step verification with computational checks, plus `<key-original-step>` mismatch analysis.
+4. **Phase 4: Structural Completeness & Global Checks** — Chain completeness, problem-proof alignment, and coverage checks.
+
+**Human guidance.** There are two levels of human guidance:
+
+1. **Global guidance** (`human_help/human_help.md`) — Persistent hints that apply across all rounds. You can update this file at any time during a run.
+2. **Per-round guidance** (`verification/round_N/human_help/human_help.md`) — Round-specific feedback. After reviewing round N's results, write targeted feedback here; round N+1's proof search agent will read it alongside the global file. Each round's `human_help/` directory is created automatically when the round starts.
+
+The proof search agent reads both sources at the start of every round. Per-round guidance is especially useful for pointing out specific errors in the previous round's proof or suggesting a different strategy based on what you observed.
 
 **Resume support.** If the pipeline is interrupted and re-run with the same output directory, it automatically detects prior progress: skips the literature survey if complete, detects which step within a round was last completed (including parallel steps), cleans up incomplete state, restores `proof.md` from backup if needed, and resumes from exactly where it left off. Resume detection respects the `skip_decomposition` setting and multi-verifier configuration — verification is only considered complete when ALL expected verification files exist (one per configured verifier per configured proof provider).
 
@@ -115,7 +132,7 @@ Each prompt file in `prompts/` is a Markdown template with `{placeholder}` varia
 | Prompt | Placeholders |
 |--------|-------------|
 | `literature_survey.md` | `problem_file`, `related_info_dir`, `output_dir`, `error_file` |
-| `proof_search.md` | `problem_file`, `proof_file`, `output_dir`, `related_info_dir`, `round_num`, `proof_status_file`, `previous_round_instructions`, `human_help_dir`, `skill_file`, `error_file` |
+| `proof_search.md` | `problem_file`, `proof_file`, `output_dir`, `related_info_dir`, `round_num`, `proof_status_file`, `previous_round_instructions`, `human_help_dir`, `prev_round_human_help_dir`, `skill_file`, `error_file` |
 | `proof_decompose.md` | `problem_file`, `proof_file`, `output_file`, `output_dir`, `error_file` |
 | `proof_verify.md` | `problem_file`, `proof_file`, `decomposition_file`, `output_file`, `output_dir`, `error_file` |
 | `proof_verify_direct.md` | `problem_file`, `proof_file`, `output_file`, `output_dir`, `error_file` |
@@ -163,7 +180,9 @@ Given an output directory `<output>/`, a complete run produces:
 │   │   ├── verification_result.md     #   Verification verdict
 │   │   ├── error_proof_search.md      #   Error log for proof search (empty if no errors)
 │   │   ├── error_proof_decompose.md   #   Error log for decomposition (absent when skip_decomposition)
-│   │   └── error_proof_verify*.md     #   Error log for verification (suffix matches verify variant used)
+│   │   ├── error_proof_verify*.md     #   Error log for verification (suffix matches verify variant used)
+│   │   └── human_help/
+│   │       └── human_help.md          #   Per-round human guidance (read by next round's proof search)
 │   └── round_2/ ...
 │
 ├── summary_log/                       # Stage 2: summary agent logs
@@ -182,8 +201,10 @@ Each round has per-model subdirectories for proof search, and each proof has per
 verification/
   round_N/
     proof_before_round.md              # Backup of main proof.md
-    selection.md                       # Selector agent's pick + reasoning
-    error_proof_select.md              # Error log for selector (empty if no errors)
+    selection.md                       # Selector agent's pick + reasoning (absent when single provider)
+    error_proof_select.md              # Error log for selector (absent when single provider)
+    human_help/
+      human_help.md                    # Per-round human guidance (read by round N+1)
     claude/                            # Claude's proof attempt (if claude in multi_model.providers)
       proof.md                         # Claude's proof
       proof_status.md                  # Claude's approach log
@@ -407,14 +428,18 @@ Prove that there exists $c \in (0,1)$ such that
 
 ### Human Guidance
 
-You can influence the proof search by placing files in `human_help/`. The proof search agent reads this directory at the start of every round. Use it to:
+You can influence the proof search at two levels:
 
-- Suggest a proof strategy or technique
-- Point out an error you noticed in a previous round's proof
-- Provide a hint about a key lemma or theorem
-- Steer the agent away from a dead-end approach
+**Global guidance** (`human_help/human_help.md`) — Persistent hints that apply across all rounds. Good for general strategy, important theorems, or constraints that should always be considered. You can update this file while the pipeline is running.
 
-You can add or update files while the pipeline is running — the agent picks up changes at the start of the next round.
+**Per-round guidance** (`verification/round_N/human_help/human_help.md`) — Targeted feedback after reviewing round N's results. Round N+1's proof search agent reads this alongside the global file. Good for:
+
+- Pointing out a specific error in round N's proof
+- Suggesting a different strategy based on what you saw fail
+- Providing a hint about why a particular step doesn't work
+- Steering away from a dead-end the agent keeps revisiting
+
+Each round's `human_help/` directory is created automatically when the round starts. The proof search agent reads both the global file and the previous round's per-round file at the start of every round.
 
 ### Smoke Test
 
@@ -487,6 +512,8 @@ pipeline:
   # Multi-model parallel proof search.
   # When enabled: listed providers run proof search in parallel each round,
   #   with a selector agent picking the best proof.
+  # When enabled with a single provider: runs in parallel mode but skips
+  #   the selector agent (no selection needed for one proof).
   # When disabled: all problems use Claude only for proof search.
   # Cost scales with number of providers: 2 providers = 2x proof search cost, 3 = 3x.
   multi_model:
@@ -581,7 +608,8 @@ This pipeline runs Claude CLI with `--dangerously-skip-permissions`. This means 
                                |                   v
                                |            Selector Agent
                                |       (picks best proof; requires
-                               |        unanimous PASS from all verifiers)
+                               |        unanimous PASS from all verifiers;
+                               |        skipped when single provider)
                                |                   |
                                v                   v
                           Verdict Agent
@@ -622,7 +650,7 @@ flowchart TD
     L -->|Yes| N["Skip decomposition"]
     M --> O["Verification (parallel)<br/>N proofs × M verifiers"]
     N --> O
-    O --> P["Selector Agent<br/>picks best proof; requires unanimous PASS"]
+    O --> P["Selector Agent<br/>picks best proof; requires unanimous PASS<br/>(skipped when single provider)"]
     P --> J
 
     H --> J
