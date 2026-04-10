@@ -295,7 +295,7 @@ To find such a uniform δ, we use compactness.
 id: SG2
 type: reduction
 parent: SG1
-claim: The open cover {B(x, δ_x/2) : x ∈ [0,1]} of [0,1] has a finite subcover.
+claim: The open cover {{B(x, δ_x/2) : x ∈ [0,1]}} of [0,1] has a finite subcover.
 justification: By Heine-Borel, [0,1] is compact, so this finite subcover exists. The minimum δ over the finite subcover gives a uniform δ for SG1.
 </subgoal>
 
@@ -303,7 +303,7 @@ justification: By Heine-Borel, [0,1] is compact, so this finite subcover exists.
 
 <subgoal-resolved id="SG2" by="proved above via Heine-Borel" />
 
-Taking δ = min(δ_{x_1}, ..., δ_{x_n})/2, we get the uniform δ for SG1.
+Taking δ = min(δ_{{x_1}}, ..., δ_{{x_n}})/2, we get the uniform δ for SG1.
 
 <subgoal-resolved id="SG1" by="follows from SG2 — the finite subcover gives a uniform δ" />
 ```
