@@ -242,6 +242,116 @@ Every proof has steps that are original, nontrivial, and problem-specific — th
 - Do not inflate: tagging a routine step as key-original does not make it so. The verification agent will independently assess which steps are nontrivial.
 - Do not hide: if a step is nontrivial but you do not tag it, the verification agent will flag the mismatch.
 
+## CRITICAL: Declare Subgoals (Proof Tree)
+
+The proof must declare its logical architecture as a **tree of subgoals**. The root is the main problem ("main"). Every intermediate claim the proof needs to establish is a node in this tree. There are two types of subgoals:
+
+- **`type: reduction`** — The prover's strategic decomposition: "to prove X, it suffices to prove Y." These represent proof strategy.
+- **`type: condition`** — A hypothesis required by a cited result: "Theorem T requires condition C, so I must verify C." These represent obligations imposed by applied theorems.
+
+Both types are nodes in the same tree, checked the same way: the claim must be proved, and the connection to its parent must be valid.
+
+### Subgoal lifecycle: declare, then resolve
+
+**Step 1: Declare** the subgoal with a full `<subgoal>` tag when it is first identified:
+
+```
+<subgoal>
+id: [unique identifier, e.g. SG1, SG2, ...]
+type: [reduction / condition]
+parent: [what this subgoal helps prove — "main" for top-level, or another subgoal id]
+claim: [precise mathematical statement]
+justification: [for reduction: why proving this suffices for the parent]
+              [for condition: which cited result requires this, and which hypothesis it is]
+</subgoal>
+```
+
+**Step 2: Resolve** the subgoal later in the proof, at the point where it is actually established:
+
+```
+<subgoal-resolved id="SG1" by="[brief description of how — e.g. 'proved above', 'by Step 3', 'cited: DCT']" />
+```
+
+If a subgoal is proved immediately at the point of declaration, place the `<subgoal-resolved>` tag right after the argument. Every `<subgoal>` must have a corresponding `<subgoal-resolved>` by the end of the proof.
+
+### Example 1: Reductions (proof strategy)
+
+Suppose the main problem is: "Prove that every continuous function on [0,1] is uniformly continuous."
+
+```
+We prove uniform continuity by finding a uniform δ for any ε.
+
+<subgoal>
+id: SG1
+type: reduction
+parent: main
+claim: For every ε > 0, there exists δ > 0 such that for all x, y ∈ [0,1], |x - y| < δ implies |f(x) - f(y)| < ε.
+justification: This is the definition of uniform continuity — proving this claim directly proves the main result.
+</subgoal>
+
+To find such a uniform δ, we use compactness.
+
+<subgoal>
+id: SG2
+type: reduction
+parent: SG1
+claim: The open cover {B(x, δ_x/2) : x ∈ [0,1]} of [0,1] has a finite subcover.
+justification: By Heine-Borel, [0,1] is compact, so this finite subcover exists. The minimum δ over the finite subcover gives a uniform δ for SG1.
+</subgoal>
+
+[... proof that the finite subcover exists ...]
+
+<subgoal-resolved id="SG2" by="proved above via Heine-Borel" />
+
+Taking δ = min(δ_{x_1}, ..., δ_{x_n})/2, we get the uniform δ for SG1.
+
+<subgoal-resolved id="SG1" by="follows from SG2 — the finite subcover gives a uniform δ" />
+```
+
+### Example 2: Conditions (obligations from cited results)
+
+Suppose the proof applies the Dominated Convergence Theorem:
+
+```
+By the Dominated Convergence Theorem, we may exchange the limit and integral.
+We must verify its hypotheses:
+
+<subgoal>
+id: SG5
+type: condition
+parent: SG3
+claim: f_n → f pointwise almost everywhere on Ω
+justification: Required hypothesis of the Dominated Convergence Theorem (cite label: DCT).
+</subgoal>
+
+<subgoal>
+id: SG6
+type: condition
+parent: SG3
+claim: There exists an integrable function g such that |f_n(x)| ≤ g(x) for all n and a.e. x ∈ Ω
+justification: Domination hypothesis of the Dominated Convergence Theorem (cite label: DCT).
+</subgoal>
+
+Pointwise convergence was established in Step 3 above.
+<subgoal-resolved id="SG5" by="proved in Step 3" />
+
+The bound |f_n(x)| ≤ M from Step 2 gives g(x) = M · χ_Ω, which is integrable since Ω has finite measure.
+<subgoal-resolved id="SG6" by="g = M · χ_Ω from Step 2, integrable by finite measure" />
+```
+
+### Rules
+
+- Every proof with more than one logical stage must have at least one `<subgoal>`.
+- **Every application of a cited result with conditions must have `type: condition` subgoals for each hypothesis.** Models routinely apply theorems without checking conditions — this is non-negotiable.
+- The `claim` field must be a precise mathematical statement — not a vague description like "handle the boundary case."
+- The `justification` field must explain:
+  - For `type: reduction`: why proving this claim suffices for its parent. This is where silent goal-shifting gets caught.
+  - For `type: condition`: which cited result requires this condition, and which specific hypothesis it corresponds to.
+- The `parent` field creates a tree rooted at "main." The verifier checks that the tree is complete (every branch terminates) and every reduction/condition is valid.
+- **Every `<subgoal>` must have a matching `<subgoal-resolved>` by the end of the proof.** A subgoal without a resolution marker is an unresolved gap.
+- The `by` field in `<subgoal-resolved>` must point to a specific part of the proof — not vague like "this is obvious."
+- For well-known results where conditions are trivially satisfied (e.g., continuity of a polynomial), a brief one-line subgoal and immediate resolution is fine. The point is to be explicit, not verbose for trivial cases.
+
 ---
 
 ## HERE ARE THE INPUT FILE PATHS:

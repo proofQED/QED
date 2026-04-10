@@ -12,6 +12,8 @@ You must be absolutely strict. If you are uncertain if the proof proved certain 
 
 ## Verification Method
 
+The verification proceeds in four phases, ordered from cheapest/most-fatal to most-expensive. Early phases are structural checks; later phases are detailed work that builds on earlier results.
+
 ### Phase 1: Problem-Statement Integrity
 
 **This is the most critical check and must be done FIRST, before anything else.**
@@ -32,9 +34,11 @@ The proof search agent may — intentionally or accidentally — alter, weaken, 
 
 **If the problem the proof claims to solve differs from `{problem_file}` in ANY mathematically meaningful way, this check is FAIL — regardless of whether the proof of the altered statement is correct. Record the failure and continue to the remaining phases.**
 
-### Phase 2: Citation Format and Faithfulness Verification
+### Phase 2: Citation Verification
 
-**This step is critical. Language models routinely hallucinate citations — inventing theorem numbers, attributing results to wrong sources, fabricating URLs, or citing statements that do not appear in the referenced source. You must catch every instance of this.**
+**This phase is critical. Language models routinely hallucinate citations — inventing theorem numbers, attributing results to wrong sources, fabricating URLs, or citing statements that do not appear in the referenced source. You must catch every instance of this.**
+
+Citation verdicts from this phase are used in Phase 4 — if a citation is FAIL, any step depending on it is also FAIL.
 
 #### 2a. Identify all citations
 
@@ -75,11 +79,33 @@ Flag any citation with missing or malformed fields as FAIL.
 
 **Verdict for each citation:** PASS (source verified, statement matches, usage correct) / FAIL (any issue found) / UNABLE_TO_VERIFY (source cannot be accessed — note this is still a risk flag)
 
-**If ANY citation is FAIL, this step is FAIL.** Record exactly what is wrong for each failed citation.
+**If ANY citation is FAIL, this phase is FAIL.** Record exactly what is wrong for each failed citation.
 
-**If a key proof step depends on a citation that is FAIL or UNABLE_TO_VERIFY, that proof step itself becomes FAIL or UNCERTAIN.**
+### Phase 3: Subgoal Tree Structure
 
-### Phase 3: Logical Step Verification
+**Check the proof's logical architecture BEFORE checking individual steps.** If the subgoal tree is structurally broken, the proof fails regardless of how correct individual steps are.
+
+The proof should declare its architecture as a tree of `<subgoal>` nodes rooted at "main," with `<subgoal-resolved>` markers where each subgoal is established. There are two types: `type: reduction` (proof strategy) and `type: condition` (hypothesis of a cited result).
+
+1. **List all declared subgoals and resolutions.** Extract every `<subgoal>` block and every `<subgoal-resolved>` marker. Record each declaration's id, type, parent, claim, and justification. Record each resolution's id and `by` field.
+2. **Check the tree structure.** The `parent` fields form a tree rooted at "main." Verify:
+   - Every subgoal's `parent` refers to either "main" or another declared subgoal id.
+   - The tree has no orphans (subgoals with nonexistent parents) and no cycles.
+3. **Check each node's justification (reduction validity).** For every subgoal:
+   - **`type: reduction`**: Does proving this subgoal's `claim` actually help prove the parent? Is the reduction logically sound? This is where you catch **silent goal-shifting** — if the reduction is invalid, the proof has a structural gap regardless of whether individual steps are correct.
+   - **`type: condition`**: Does the cited result actually require this condition? Is the condition stated correctly (matching the cited result's exact hypothesis)? Cross-reference with citation verdicts from Phase 2.
+4. **Cross-reference conditions with citations.** For every `<cite>` block in the proof, check: does the cited result have conditions/hypotheses? If so, are there corresponding `type: condition` subgoals for each hypothesis? **Missing condition subgoals are a FAIL** — the prover applied a result without checking its conditions. Also check results applied without formal `<cite>` tags (e.g., "by compactness," "by the implicit function theorem") — if the result has nontrivial conditions, flag missing condition subgoals.
+5. **Check tree completeness.** Do the subgoals cover the entire proof's logical architecture? If the proof has multiple logical stages but only one subgoal (or none), the prover may be hiding the structure. Flag any major logical transition that lacks a corresponding subgoal.
+
+**Note:** This phase checks whether the tree STRUCTURE is valid — whether the reductions are sound and the architecture is complete. It does NOT check whether individual subgoals are actually proved (that happens in Phase 4).
+
+**EARLY TERMINATION: If ANY of Phase 1, 2, or 3 is FAIL, STOP HERE.** Write the output file with the results of Phases 1–3, mark Phase 4 as "SKIPPED — structural issues found in earlier phases," set the Overall Verdict to FAIL, and list the specific issues to fix. Do NOT proceed to Phase 4. The expensive detailed verification is only worth doing if the proof's foundations (correct problem, real citations, sound architecture) are solid.
+
+### Phase 4: Detailed Verification
+
+This is the expensive, detailed work. Only reached if Phases 1–3 all pass. It builds on all prior phases: citation verdicts from Phase 2, and the subgoal tree from Phase 3.
+
+#### 4a. Logical Step Verification
 
 Read the proof end-to-end. Identify every key logical assertion (step) in the proof — each step should be a single, precise mathematical statement that the proof makes or relies on. Be maximally fine-grained: split complex reasoning into individual steps. For each step:
 
@@ -93,7 +119,18 @@ Read the proof end-to-end. Identify every key logical assertion (step) in the pr
 8. **Assign a verdict** — PASS, FAIL, or UNCERTAIN (if you cannot determine correctness but suspect a gap).
 9. **If FAIL or UNCERTAIN** — State precisely what is wrong or what is missing.
 
-After verifying all steps, check the proof's `<key-original-step>` tags:
+#### 4b. Subgoal Resolution Verification
+
+Check that every subgoal declared in Phase 3 is actually resolved:
+
+1. **Check that every `<subgoal>` has a matching `<subgoal-resolved>`.** Any subgoal without a resolution marker is an unresolved gap.
+2. **Validate each resolution.** For every `<subgoal-resolved>`:
+   - Does the `by` field point to a specific, real part of the proof?
+   - Does that part of the proof actually establish the subgoal's `claim`?
+   - Is the resolution valid, or is it hand-waving?
+3. **Cross-reference with step verdicts.** If the steps that supposedly resolve a subgoal were marked FAIL or UNCERTAIN in 4a, the resolution is also FAIL.
+
+#### 4c. Key Original Step Analysis
 
 1. **List all steps the prover tagged as `<key-original-step>`.** These are the steps the prover claims are the original, nontrivial core of the proof.
 2. **Independently identify which steps YOU consider nontrivial and original** — the steps where the real difficulty of the problem is resolved, not routine setup or cited results.
@@ -102,27 +139,11 @@ After verifying all steps, check the proof's `<key-original-step>` tags:
    - **Inflated tag** — The prover tagged a routine step as key-original. This dilutes the signal and may indicate the prover is avoiding the real hard parts.
 4. **Check that tagged steps are maximally detailed.** Inside every `<key-original-step>`, there must be no "clearly," "obviously," or hand-waving. The prover committed to these being the hard parts — verify the justification matches that commitment.
 
-### Phase 4: Structural Completeness and Global Checks
-
-#### 4a. Structural Completeness
-
-After identifying and verifying each step, check whether the steps **together** constitute a complete proof:
-
-1. **Chain completeness** — Does the dependency chain from the hypotheses (first steps) to the final conclusion (last step) have any breaks? Are there logical jumps between steps that aren't captured?
-2. **Missing steps** — Are there assertions in the proof text that you did NOT capture as steps? Read the proof again and flag anything you missed.
-3. **Redundancy** — Are any steps unused (no later step depends on them, and they are not the final conclusion)? This may indicate dead-end reasoning or missing connections.
-
-#### 4b. Problem-Proof Alignment
-
-- Does the chain of steps actually connect the hypotheses to the conclusion?
-- Are all conditions/hypotheses from the problem statement used somewhere in the step chain?
-- Does the final step actually establish what the problem asks?
-
-#### 4c. Coverage Check
+#### 4d. Coverage Check
 
 - Are all cases covered if case analysis is used?
 - Are boundary/degenerate cases addressed?
-- Are all hypotheses used? (If a hypothesis is unused, is the statement trivially true without it, or is there a gap?)
+- Are all hypotheses from the problem statement used? (If a hypothesis is unused, is the statement trivially true without it, or is there a gap?)
 
 ---
 
@@ -150,7 +171,7 @@ Printing large expressions to stdout wastes your context window. Write large res
 
 ## Critical Instructions
 
-- **Follow the four phases in order.** Do not skip ahead. If Phase 1 fails, record the failure and continue with the remaining phases anyway (the proof may have other issues too).
+- **Follow the four phases in order.** Do not skip ahead. Within Phases 1–3, if one fails, continue to the next (so all structural issues are reported together). But if ANY of Phases 1–3 fails, do NOT proceed to Phase 4 — write the output and stop.
 - Be thorough and skeptical. Your job is to find errors, not to approve proofs.
 - If a hard problem is "easily" proved, be especially suspicious.
 - Check that proof by contradiction actually uses the negated assumption.
@@ -237,9 +258,30 @@ Write ALL verification results to:
 
 ---
 
-## Phase 3: Logical Step Verification
+## Phase 3: Subgoal Tree Structure
 
-### Step 1
+**Subgoals declared:** [N total — M reductions, K conditions]
+
+| ID | Type | Parent | Claim (short) | Justification valid |
+|----|------|--------|---------------|---------------------|
+| SG1 | reduction | main | [brief] | [yes/no] |
+| SG2 | condition | SG1 | [brief] | [yes/no] |
+| ... | ... | ... | ... | ... |
+
+**Tree well-formed:** [YES / NO — no orphans, no cycles, all parents valid]
+**Invalid reductions:** [list any subgoals where the reduction is logically unsound, or "None"]
+**Missing reduction subgoals:** [list any major proof transitions without corresponding subgoal, or "None"]
+**Missing condition subgoals:** [list any cited results with unchecked conditions, or "None"]
+
+**Phase 3 overall:** [PASS / FAIL — FAIL if tree malformed, invalid reductions, or missing subgoals]
+
+---
+
+## Phase 4: Detailed Verification
+
+### 4a. Logical Step Verification
+
+#### Step 1
 **Assertion:** [precise mathematical claim]
 **Justification in proof:** "[quote from proof]"
 **Dependencies:** [list earlier step numbers or citation labels, or "None (hypothesis)"]
@@ -247,14 +289,12 @@ Write ALL verification results to:
 **Analysis:** [why this step is correct/incorrect/unclear]
 **Computational check:** [confirmed / contradicted / not checked — describe what was tested]
 
-### Step 2
+#### Step 2
 ...
 
 [Continue for ALL identified steps. Do not skip or combine steps.]
 
----
-
-### Step Verification Summary
+**Step Verification Summary:**
 
 | # | Step (short description) | Verdict | Computational |
 |---|--------------------------|---------|---------------|
@@ -265,7 +305,18 @@ Write ALL verification results to:
 **Steps failed:** Y / N
 **Steps uncertain:** Z / N
 
-### Key Original Step Analysis
+### 4b. Subgoal Resolution Verification
+
+| ID | Type | Resolved | Resolution valid | Notes |
+|----|------|----------|------------------|-------|
+| SG1 | reduction | [yes/no] | [yes/no/not checked] | [brief note] |
+| SG2 | condition | [yes/no] | [yes/no/not checked] | [brief note] |
+| ... | ... | ... | ... | ... |
+
+**Unresolved subgoals:** [list any `<subgoal>` without a matching `<subgoal-resolved>`, or "None"]
+**Invalid resolutions:** [list any `<subgoal-resolved>` where the `by` field is wrong or hand-waving, or "None"]
+
+### 4c. Key Original Step Analysis
 
 **Prover-tagged key steps:** [list step numbers the prover wrapped in `<key-original-step>`]
 **Verifier-identified nontrivial steps:** [list step numbers YOU consider nontrivial and original]
@@ -278,24 +329,11 @@ Write ALL verification results to:
 
 **Hand-waving inside tagged steps:** [list any tagged key steps that are handwavy, not explicit, sketchy]
 
-**Key Original Step Analysis:** [PASS / FAIL — FAIL if any untagged nontrivial steps, inflated tags, or hand-waving inside tagged steps]
+### 4d. Coverage
 
----
-
-## Phase 4: Structural Completeness and Global Checks
-
-### Structural Completeness
-**Chain complete:** [YES / NO — is there an unbroken dependency path from hypotheses to conclusion?]
-**Missing steps found:** [list any, or "None"]
-**Unused steps:** [list any, or "None"]
-
-### Problem-Proof Alignment
-**Status:** [PASS/FAIL]
-**Details:** [does the step chain connect hypotheses to conclusion?]
-
-### Coverage
-**Status:** [PASS/FAIL]
-**Missing items:** [list any gaps — uncovered cases, unused hypotheses, missing edge cases]
+**All cases covered:** [YES / NO — list any missing cases]
+**Boundary/degenerate cases:** [addressed / missing — list any gaps]
+**All hypotheses used:** [YES / NO — list any unused hypotheses and whether their absence indicates a gap]
 
 ---
 
@@ -305,9 +343,11 @@ Write ALL verification results to:
 |-------|--------|
 | Phase 1: Problem-Statement Integrity | [PASS/FAIL] |
 | Phase 2: Citation Verification | [PASS/FAIL] |
-| Phase 3: All Steps Verified | [PASS/FAIL — FAIL if any step is FAIL or UNCERTAIN] |
-| Phase 3: Key Original Step Analysis | [PASS/FAIL] |
-| Phase 4: Structural Completeness & Global Checks | [PASS/FAIL] |
+| Phase 3: Subgoal Tree Structure | [PASS/FAIL] |
+| Phase 4a: All Steps Verified | [PASS/FAIL — FAIL if any step is FAIL or UNCERTAIN] |
+| Phase 4b: Subgoal Resolution | [PASS/FAIL — FAIL if unresolved or invalid resolutions] |
+| Phase 4c: Key Original Step Analysis | [PASS/FAIL] |
+| Phase 4d: Coverage | [PASS/FAIL] |
 
 ### Overall Verdict: [PASS/FAIL]
 
