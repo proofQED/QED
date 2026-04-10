@@ -2129,7 +2129,7 @@ async def main():
 
     pipeline_cfg = config.get("pipeline", {})
     claude_cfg = config.get("claude", {})
-    max_proof = pipeline_cfg.get("max_proof_iterations", 9)
+    max_proof = int(pipeline_cfg.get("max_proof_iterations", 9))
 
     problem_file = os.path.abspath(args.input)
     output_dir = os.path.abspath(args.output)
