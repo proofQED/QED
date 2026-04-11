@@ -78,4 +78,4 @@ gemini:
   model: "gemini-3.1-pro-preview"  # or "gemini-3-flash-preview"
   approval_mode: "yolo"
   thinking_level: "HIGH"  # Gemini 3 thinking strength; for Gemini 2.5 use thinking_budget instead
-  api_key: ""  # paste your Google Gemini API key here
+  api_key: ""  # paste your Google Gemini API key here, leave empty if Gemini CLI is already logged in with subscription     
