@@ -45,7 +45,7 @@ Model selection is **solely determined by configuration** — the `multi_model.p
 
 **Single-model proof search + single-model verification — 3 steps per round:**
 
-1. **Proof Search Agent** — Reads the problem, the literature survey, any previous-round feedback, and any human guidance from `human_help/`. Writes or refines a complete natural-language proof in `proof.md`.
+1. **Proof Search Agent** — Reads the problem, the literature survey, any previous-round feedback, and any human prover guidance from `human_help/`. Writes or refines a complete natural-language proof in `proof.md`.
 2. **Verification Agent** — Directly verifies the proof for logical validity, mathematical correctness, computational checks, problem-statement integrity, and structural completeness. Writes `verification_result.md`.
 3. **Verdict Agent** — Reads the verification result and returns `DONE` or `CONTINUE`.
 
@@ -68,25 +68,33 @@ All agents receive `skill/super_math_skill.md` as a system-level instruction —
 
 **Verification phases.** Verification is split across two prompt files:
 
-`proof_verify_structural.md` (Phases 1–3):
+`proof_verify_structural.md` (Phases 1–4):
 
 1. **Phase 1: Problem-Statement Integrity** — Word-by-word comparison of the original problem vs. what the proof claims to prove.
 2. **Phase 2: Citation Verification** — Checks every `<cite>` block for correct format, then independently verifies faithfulness (URL works, statement matches source, usage is correct). Models routinely hallucinate citations.
 3. **Phase 3: Subgoal Tree Structure** — Validates the proof's subgoal decomposition tree for completeness and well-formedness.
+4. **Phase 4: Additional Verification Rules** — Applies human-provided verification criteria from global and per-round rule files. Each rule is treated as a hard requirement.
 
-`proof_verify_detailed.md` (Phase 4):
+`proof_verify_detailed.md` (Phase 5):
 
-4. **Phase 4a: Logical Step Verification** — Fine-grained step-by-step verification with computational checks.
-5. **Phase 4b: Subgoal Resolution** — Checks that every subgoal identified in Phase 3 is fully resolved.
-6. **Phase 4c: Key Original Step Analysis** — `<key-original-step>` mismatch analysis: untagged hard steps, inflated tags.
-7. **Phase 4d: Coverage** — Chain completeness, problem-proof alignment, and coverage checks.
+5. **Phase 5a: Logical Step Verification** — Fine-grained step-by-step verification with computational checks.
+6. **Phase 5b: Subgoal Resolution** — Checks that every subgoal identified in Phase 3 is fully resolved.
+7. **Phase 5c: Key Original Step Analysis** — `<key-original-step>` mismatch analysis: untagged hard steps, inflated tags.
+8. **Phase 5d: Coverage** — Chain completeness, problem-proof alignment, and coverage checks.
 
-**Human guidance.** There are two levels of human guidance:
+**Human guidance.** There are two channels of human guidance, each with a global and per-round level:
 
-1. **Global guidance** (`human_help/human_help.md`) — Persistent hints that apply across all rounds. You can update this file at any time during a run.
-2. **Per-round guidance** (`verification/round_N/human_help/human_help.md`) — Round-specific feedback. After reviewing round N's results, write targeted feedback here; round N+1's proof search agent will read it alongside the global file. Each round's `human_help/` directory is created automatically when the round starts.
+**Prover guidance** (read by the proof search agent):
 
-The proof search agent reads both sources at the start of every round. Per-round guidance is especially useful for pointing out specific errors in the previous round's proof or suggesting a different strategy based on what you observed.
+1. **Global prover guidance** (`human_help/additional_prove_human_help_global.md`) — Persistent hints that apply across all rounds. You can update this file at any time during a run.
+2. **Per-round prover guidance** (`verification/round_N/human_help/additional_prove_human_help_per_round.md`) — Round-specific feedback. After reviewing round N's results, write targeted feedback here; round N+1's proof search agent will read it alongside the global file.
+
+**Verification rules** (read by the structural verification agent):
+
+1. **Global verification rules** (`human_help/additional_verify_rule_global.md`) — Persistent additional verification criteria that apply across all rounds. The structural verifier treats every rule in this file as a hard requirement.
+2. **Per-round verification rules** (`verification/round_N/human_help/additional_verify_rule_per_round.md`) — Round-specific verification criteria. After reviewing round N's results, write targeted rules here; round N+1's structural verifier will read them alongside the global rules.
+
+Each round's `human_help/` directory is created automatically when the round starts. The proof search agent reads both prover guidance sources at the start of every round. The structural verifier reads both verification rule sources. Per-round guidance is especially useful for pointing out specific errors in the previous round's proof or adding verification checks based on what you observed.
 
 **Resume support.** If the pipeline is interrupted and re-run with the same output directory, it automatically detects prior progress: skips the literature survey if complete, detects which step within a round was last completed (including parallel steps), cleans up incomplete state, restores `proof.md` from backup if needed, and resumes from exactly where it left off. Resume detection respects the multi-verifier configuration — verification is only considered complete when ALL expected verification files exist (one per configured verifier per configured proof provider).
 
@@ -116,8 +124,8 @@ proof_agent/
 │   ├── literature_survey.md           # Stage 0: literature survey agent prompt
 │   ├── brainstorm.md                 # Stage 1: brainstorm session prompt (optional)
 │   ├── proof_search.md               # Stage 1: proof search agent prompt
-│   ├── proof_verify_structural.md    # Stage 1: structural verification prompt (Phases 1-3)
-│   ├── proof_verify_detailed.md      # Stage 1: detailed verification prompt (Phase 4)
+│   ├── proof_verify_structural.md    # Stage 1: structural verification prompt (Phases 1-4)
+│   ├── proof_verify_detailed.md      # Stage 1: detailed verification prompt (Phase 5)
 │   ├── proof_verify_easy.md          # Stage 1: lightweight verification prompt (easy)
 │   ├── proof_select.md              # Stage 1: selector agent prompt (multi-model only)
 │   ├── verdict_proof.md              # Stage 1: verdict agent prompt
@@ -127,7 +135,8 @@ proof_agent/
 │   └── problem.tex                    # Placeholder — put your problem statement here
 │
 ├── human_help/
-│   └── human_help.md                  # Drop hints/suggestions here during a run
+│   ├── additional_prove_human_help_global.md   # Prover hints/suggestions (all rounds)
+│   └── additional_verify_rule_global.md        # Extra verification rules (all rounds)
 │
 └── skill/
     └── super_math_skill.md            # System prompt: principles for proof construction
@@ -142,7 +151,7 @@ Each prompt file in `prompts/` is a Markdown template with `{placeholder}` varia
 | `literature_survey.md` | `problem_file`, `related_info_dir`, `output_dir`, `error_file` |
 | `brainstorm.md` | `problem_file`, `related_info_dir`, `proof_file`, `prev_verification_dir`, `round_num`, `output_file`, `error_file` |
 | `proof_search.md` | `problem_file`, `proof_file`, `output_dir`, `related_info_dir`, `round_num`, `proof_status_file`, `previous_round_instructions`, `human_help_dir`, `prev_round_human_help_dir`, `skill_file`, `scratch_pad_file`, `brainstorm_dir`, `error_file` |
-| `proof_verify_structural.md` | `problem_file`, `proof_file`, `output_file`, `output_dir`, `error_file` |
+| `proof_verify_structural.md` | `problem_file`, `proof_file`, `output_file`, `output_dir`, `error_file`, `additional_verify_rule_global_file`, `additional_verify_rule_prev_round_file` |
 | `proof_verify_detailed.md` | `problem_file`, `proof_file`, `structural_report_file`, `output_file`, `output_dir`, `error_file` |
 | `proof_verify_easy.md` | `problem_file`, `proof_file`, `output_file`, `output_dir`, `error_file` |
 | `proof_select.md` | `problem_file`, `verification_reports_block`, `proof_claude`, `proof_codex`, `proof_gemini`, `selection_file`, `error_file` |
@@ -189,13 +198,14 @@ Given an output directory `<output>/`, a complete run produces:
 │   │   ├── verification_result.md     #   Verification verdict (easy mode)
 │   │   ├── verification_file/         #   Verification outputs (non-easy mode)
 │   │   │   ├── structural/
-│   │   │   │   └── verification_result.md   #   Structural verification (Phases 1-3)
+│   │   │   │   └── verification_result.md   #   Structural verification (Phases 1-4)
 │   │   │   └── detailed/
-│   │   │       └── verification_result.md   #   Detailed verification (Phase 4)
+│   │   │       └── verification_result.md   #   Detailed verification (Phase 5)
 │   │   ├── error_proof_search.md      #   Error log for proof search (empty if no errors)
 │   │   ├── error_proof_verify*.md     #   Error log for verification (suffix matches verify variant used)
 │   │   └── human_help/
-│   │       └── human_help.md          #   Per-round human guidance (read by next round's proof search)
+│   │       ├── additional_prove_human_help_per_round.md  #   Prover guidance (read by next round's proof search)
+│   │       └── additional_verify_rule_per_round.md       #   Verification rules (read by next round's structural verifier)
 │   └── round_2/ ...
 │
 ├── summary_log/                       # Stage 2: summary agent logs
@@ -219,7 +229,8 @@ verification/
     brainstorm/                        # Brainstorm ideas (when enabled)
       brainstorm_result_*.md           # One file per brainstorm provider
     human_help/
-      human_help.md                    # Per-round human guidance (read by round N+1)
+      additional_prove_human_help_per_round.md  # Prover guidance (read by round N+1's proof search)
+      additional_verify_rule_per_round.md       # Verification rules (read by round N+1's structural verifier)
     claude/                            # Claude's proof attempt (if claude in multi_model.providers)
       proof.md                         # Claude's proof
       proof_status.md                  # Claude's approach log
@@ -400,7 +411,7 @@ python code/smoke_test.py
 ### Quick Start
 
 1. Place your problem statement in `problem/problem.tex`.
-2. Optionally drop hints or guidance into `human_help/`.
+2. Optionally drop prover hints into `human_help/additional_prove_human_help_global.md` and/or verification rules into `human_help/additional_verify_rule_global.md`.
 3. Run the pipeline:
 
 ```bash
@@ -436,18 +447,26 @@ Prove that there exists $c \in (0,1)$ such that
 
 ### Human Guidance
 
-You can influence the proof search at two levels:
+You can influence both the proof search and the verification at two levels each:
 
-**Global guidance** (`human_help/human_help.md`) — Persistent hints that apply across all rounds. Good for general strategy, important theorems, or constraints that should always be considered. You can update this file while the pipeline is running.
+**Prover guidance** (read by the proof search agent):
 
-**Per-round guidance** (`verification/round_N/human_help/human_help.md`) — Targeted feedback after reviewing round N's results. Round N+1's proof search agent reads this alongside the global file. Good for:
+- **Global** (`human_help/additional_prove_human_help_global.md`) — Persistent hints that apply across all rounds. Good for general strategy, important theorems, or constraints that should always be considered. You can update this file while the pipeline is running.
+- **Per-round** (`verification/round_N/human_help/additional_prove_human_help_per_round.md`) — Targeted feedback after reviewing round N's results. Round N+1's proof search agent reads this alongside the global file. Good for:
+  - Pointing out a specific error in round N's proof
+  - Suggesting a different strategy based on what you saw fail
+  - Providing a hint about why a particular step doesn't work
+  - Steering away from a dead-end the agent keeps revisiting
 
-- Pointing out a specific error in round N's proof
-- Suggesting a different strategy based on what you saw fail
-- Providing a hint about why a particular step doesn't work
-- Steering away from a dead-end the agent keeps revisiting
+**Verification rules** (read by the structural verification agent):
 
-Each round's `human_help/` directory is created automatically when the round starts. The proof search agent reads both the global file and the previous round's per-round file at the start of every round.
+- **Global** (`human_help/additional_verify_rule_global.md`) — Persistent additional verification criteria that apply across all rounds. Good for domain-specific correctness checks that the standard phases don't cover.
+- **Per-round** (`verification/round_N/human_help/additional_verify_rule_per_round.md`) — Round-specific rules after reviewing round N's results. Round N+1's structural verifier reads these alongside the global rules. Good for:
+  - Requiring the verifier to check a specific claim you suspect is wrong
+  - Adding a domain constraint the proof must satisfy
+  - Flagging a particular step for extra scrutiny
+
+Each round's `human_help/` directory is created automatically when the round starts. The proof search agent reads both prover guidance sources at the start of every round. The structural verifier reads both verification rule sources.
 
 ### Smoke Test
 

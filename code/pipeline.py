@@ -1356,6 +1356,16 @@ async def _run_parallel_round(
                              f"Structural verification: {len(providers)} proofs × {len(verification_providers)} verifiers...")
         logger.append_history(f"Iteration {i}: Parallel structural verification started (verifiers: {verifier_names})")
 
+        # Resolve additional verification rule files for structural verifier
+        additional_verify_rule_global_file = os.path.join(human_help_dir, "additional_verify_rule_global.md")
+        # Structural verifier reads PREVIOUS round's per-round verify rules
+        if prev_round_human_help_dir:
+            additional_verify_rule_prev_round_file = os.path.join(
+                prev_round_human_help_dir, "additional_verify_rule_per_round.md"
+            )
+        else:
+            additional_verify_rule_prev_round_file = ""
+
         async def _structural_verify_for_model(proof_provider):
             mdir = model_dirs[proof_provider]
             m_proof = os.path.join(mdir, "proof.md")
@@ -1368,6 +1378,8 @@ async def _run_parallel_round(
                     problem_file=problem_file,
                     proof_file=m_proof,
                     output_dir=output_dir,
+                    additional_verify_rule_global_file=additional_verify_rule_global_file,
+                    additional_verify_rule_prev_round_file=additional_verify_rule_prev_round_file,
                 ),
                 base_dir=s_dir,
                 prompts_dir=prompts_dir,
@@ -1711,15 +1723,19 @@ async def run_proof_loop(
         round_dir = os.path.join(verify_dir, f"round_{i}")
         os.makedirs(round_dir, exist_ok=True)
 
-        # Create per-round human_help directory with empty file
+        # Create per-round human_help directory with empty files
         round_hh_dir = os.path.join(round_dir, "human_help")
         os.makedirs(round_hh_dir, exist_ok=True)
-        round_hh_file = os.path.join(round_hh_dir, "human_help.md")
-        if not os.path.exists(round_hh_file):
-            with open(round_hh_file, "w") as f:
+        round_prove_hh_file = os.path.join(round_hh_dir, "additional_prove_human_help_per_round.md")
+        if not os.path.exists(round_prove_hh_file):
+            with open(round_prove_hh_file, "w") as f:
+                f.write("")
+        round_verify_rule_file = os.path.join(round_hh_dir, "additional_verify_rule_per_round.md")
+        if not os.path.exists(round_verify_rule_file):
+            with open(round_verify_rule_file, "w") as f:
                 f.write("")
 
-        # Previous round's human_help (read by this round's proof search)
+        # Previous round's human_help (read by this round's proof search and verifier)
         prev_round_hh_dir = os.path.join(verify_dir, f"round_{i-1}", "human_help")
         if i == 1 or not os.path.isdir(prev_round_hh_dir):
             prev_round_hh_dir = ""
@@ -1987,11 +2003,21 @@ async def run_proof_loop(
                     logger.log(f"--- Resuming round {i}: skipping structural verification (already complete) ---")
                     logger.append_history(f"Iteration {i}: Structural verification SKIPPED (resume)")
                 else:
-                    # Structural Verification (Phases 1-3)
+                    # Structural Verification (Phases 1-4)
                     current_step += 1
                     verifier_label = f" ({', '.join(verification_providers)})" if multi_verifier else ""
                     logger.update_status(i, max_iterations, f"{current_step}/{total_steps} Structural Verification{verifier_label}", "RUNNING", "Running structural verification agent...")
                     logger.append_history(f"Iteration {i}: Structural verification started")
+
+                    # Resolve additional verification rule files for structural verifier
+                    additional_verify_rule_global_file = os.path.join(human_help_dir, "additional_verify_rule_global.md")
+                    # Structural verifier reads PREVIOUS round's per-round verify rules
+                    if prev_round_hh_dir:
+                        additional_verify_rule_prev_round_file = os.path.join(
+                            prev_round_hh_dir, "additional_verify_rule_per_round.md"
+                        )
+                    else:
+                        additional_verify_rule_prev_round_file = ""
 
                     structural_files = await _run_multi_verification(
                         verifiers=verification_providers,
@@ -2000,6 +2026,8 @@ async def run_proof_loop(
                             problem_file=problem_file,
                             proof_file=proof_file,
                             output_dir=output_dir,
+                            additional_verify_rule_global_file=additional_verify_rule_global_file,
+                            additional_verify_rule_prev_round_file=additional_verify_rule_prev_round_file,
                         ),
                         base_dir=structural_dir,
                         prompts_dir=prompts_dir,
@@ -2038,7 +2066,7 @@ async def run_proof_loop(
                         await asyncio.sleep(2)
                         continue
 
-                # Detailed Verification (Phase 4)
+                # Detailed Verification (Phase 5)
                 current_step += 1
                 # Find structural report file(s) to pass to detailed verification
                 structural_files = _find_verification_files(structural_dir)

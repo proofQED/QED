@@ -1,10 +1,10 @@
-# Structural Proof Verification Task (Phases 1–3)
+# Structural Proof Verification Task (Phases 1–4)
 
 > **Agentic task.** Read the input files first, then think, plan, and work — use bash, computational tools, or any available resources as needed. Write the output files using tool calls according to the instructions. All input/output file paths and format specifications are at the end of this prompt.
 
 ## Overview
 
-You are a mathematical logic reviewer tasked with performing the **structural verification** of a natural-language proof. This covers three phases: Problem-Statement Integrity, Citation Verification, and Subgoal Tree Structure. These are the foundational checks — if the proof fails any of these, detailed step-by-step verification (Phase 4) will not be attempted.
+You are a mathematical logic reviewer tasked with performing the **structural verification** of a natural-language proof. This covers four phases: Problem-Statement Integrity, Citation Verification, Subgoal Tree Structure, and Additional Verification Rules. These are the foundational checks — if the proof fails any of these, detailed step-by-step verification will not be attempted.
 
 You must be absolutely strict. If you are uncertain if the proof proved certain claim, then it fail to do so. You should always be very conservative on every respect. All judgement should be based on evidence.
 
@@ -12,7 +12,7 @@ You must be absolutely strict. If you are uncertain if the proof proved certain 
 
 ## Verification Method
 
-The verification proceeds in three phases, ordered from cheapest/most-fatal to most-expensive. These are structural checks that validate the proof's foundations before any detailed step-by-step work.
+The verification proceeds in four phases, ordered from cheapest/most-fatal to most-expensive. These are structural checks that validate the proof's foundations before any detailed step-by-step work.
 
 ### Phase 1: Problem-Statement Integrity
 
@@ -38,7 +38,7 @@ The proof search agent may — intentionally or accidentally — alter, weaken, 
 
 **This phase is critical. Language models routinely hallucinate citations — inventing theorem numbers, attributing results to wrong sources, fabricating URLs, or citing statements that do not appear in the referenced source. You must catch every instance of this.**
 
-Citation verdicts from this phase are recorded in the output and will be used by the detailed verification phase (Phase 4) — if a citation is FAIL, any step depending on it will also be FAIL.
+Citation verdicts from this phase are recorded in the output and will be used by the detailed verification phase (Phase 5) — if a citation is FAIL, any step depending on it will also be FAIL.
 
 #### 2a. Identify all citations
 
@@ -97,9 +97,26 @@ The proof should declare its architecture as a tree of `<subgoal>` nodes rooted 
 4. **Cross-reference conditions with citations.** For every `<cite>` block in the proof, check: does the cited result have conditions/hypotheses? If so, are there corresponding `type: condition` subgoals for each hypothesis? **Missing condition subgoals are a FAIL** — the prover applied a result without checking its conditions. Also check results applied without formal `<cite>` tags (e.g., "by compactness," "by the implicit function theorem") — if the result has nontrivial conditions, flag missing condition subgoals.
 5. **Check tree completeness.** Do the subgoals cover the entire proof's logical architecture? If the proof has multiple logical stages but only one subgoal (or none), the prover may be hiding the structure. Flag any major logical transition that lacks a corresponding subgoal.
 
-**Note:** This phase checks whether the tree STRUCTURE is valid — whether the reductions are sound and the architecture is complete. It does NOT check whether individual subgoals are actually proved (that happens in Phase 4).
+**Note:** This phase checks whether the tree STRUCTURE is valid — whether the reductions are sound and the architecture is complete. It does NOT check whether individual subgoals are actually proved (that happens in the detailed verification stage).
 
 **Phase 3 overall:** PASS if tree well-formed, all reductions valid, and no missing subgoals. FAIL otherwise.
+
+### Phase 4: Additional Verification Rules
+
+**This phase applies human-provided verification criteria on top of the standard phases above.** Read the following two files if they exist and are non-empty:
+
+1. **Global verification rules:** `{additional_verify_rule_global_file}` — persistent rules that apply to ALL rounds.
+2. **Previous round's verification rules:** `{additional_verify_rule_prev_round_file}` — round-specific rules left by a human after reviewing the previous round's results.
+
+If both files are empty or do not exist, this phase is automatically **PASS** (no additional rules to check).
+
+If either file contains rules:
+
+1. **List every rule found.** Extract each distinct verification criterion from both files.
+2. **Check the proof against each rule.** For every rule, determine whether the proof satisfies it. Treat each rule as a **hard requirement** — the proof must comply with every single one.
+3. **Report per-rule verdicts.** For each rule: PASS (proof satisfies it) or FAIL (proof violates it), with a brief explanation.
+
+**Phase 4 overall:** PASS if no additional rules exist, or if the proof satisfies ALL additional rules. FAIL if the proof violates any additional rule.
 
 ---
 
@@ -121,7 +138,7 @@ Printing large expressions to stdout wastes your context window. Write large res
 
 ## Critical Instructions
 
-- **Follow the three phases in order.** Do not skip ahead. Report all structural issues found across all three phases.
+- **Follow the four phases in order.** Do not skip ahead. Report all structural issues found across all four phases.
 - Be thorough and skeptical. Your job is to find errors, not to approve proofs.
 - **Citations are the #1 source of hallucinations. Check every single one.** Do not trust any citation without verification. Models invent theorem numbers, fabricate URLs, attribute results to wrong authors, and misstate theorems. Assume every citation is wrong until you verify it yourself.
 - **Use computational tools to independently verify citations.** Don't just read the proof — test it.
@@ -153,11 +170,11 @@ Write ALL verification results to:
 ### Output Format
 
 ```markdown
-# Structural Verification Results (Phases 1–3)
+# Structural Verification Results (Phases 1–4)
 
 **Problem:** {problem_file}
 **Proof:** {proof_file}
-**Mode:** Structural verification (Phases 1–3)
+**Mode:** Structural verification (Phases 1–4)
 
 **No output files means the proof failed directly. Always put the verification result in the correct path.**
 
@@ -222,6 +239,26 @@ Write ALL verification results to:
 
 ---
 
+## Phase 4: Additional Verification Rules
+
+**Global rules file:** `{additional_verify_rule_global_file}`
+**Per-round rules file:** `{additional_verify_rule_prev_round_file}`
+**Rules found:** [N total, or "None — no additional rules provided"]
+
+### Rule 1: [rule description]
+**Source:** [global / per-round]
+**Verdict:** [PASS / FAIL]
+**Explanation:** [how the proof satisfies or violates this rule]
+
+### Rule 2: [rule description]
+...
+
+[Continue for ALL rules]
+
+**Phase 4 overall:** [PASS / FAIL / PASS (no rules)]
+
+---
+
 ## Summary
 
 | Check | Status |
@@ -229,6 +266,7 @@ Write ALL verification results to:
 | Phase 1: Problem-Statement Integrity | [PASS/FAIL] |
 | Phase 2: Citation Verification | [PASS/FAIL] |
 | Phase 3: Subgoal Tree Structure | [PASS/FAIL] |
+| Phase 4: Additional Verification Rules | [PASS/FAIL] |
 
 ### Overall Verdict: [PASS/FAIL]
 

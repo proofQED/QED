@@ -15,8 +15,8 @@ This proof search runs in multiple rounds. This is round {round_num}.
 - Use this information to pick up where the previous round left off and try **different** strategies.
 - **Search online for related work.** At the beginning of every round, use web search to look for related theorems, techniques, papers, or forum discussions (e.g., Math StackExchange, MathOverflow, ArXiv, Wikipedia) that may be relevant to the problem. Base your search queries on the previous round's status log — focus on the approaches that failed, the specific steps that were hard, and the techniques that were attempted. This way your searches are targeted rather than generic. Even if a literature survey was done earlier, new queries informed by what was actually tried (and what went wrong) may surface results the initial survey missed. Spend a few minutes on this before diving into proof writing.
 - **Check for human guidance.** Read any files in the following locations if they exist and are non-empty:
-  1. **Global guidance:** `{human_help_dir}` — persistent hints that apply across all rounds.
-  2. **Previous round's guidance:** `{prev_round_human_help_dir}` — round-specific feedback a human left after reviewing the previous round's results. This is especially valuable because it targets exactly what went wrong last round.
+  1. **Global guidance:** `{human_help_dir}/additional_prove_human_help_global.md` — persistent hints that apply across all rounds.
+  2. **Previous round's guidance:** `{prev_round_human_help_dir}/additional_prove_human_help_per_round.md` — round-specific feedback a human left after reviewing the previous round's results. This is especially valuable because it targets exactly what went wrong last round.
 
   A human may have left hints, suggestions, corrections, or opinions about the problem or about previous proof attempts. This input can be extremely valuable — a single human observation can unlock an approach you hadn't considered or point out a subtle error in your reasoning. Treat human guidance seriously, but still verify any claims independently.
 

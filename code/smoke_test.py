@@ -138,12 +138,13 @@ async def run_smoke_test(config: dict, config_path: str | None = None) -> bool:
             output_file="/tmp/test_verify_structural.md",
             output_dir="/tmp/test_output",
             error_file="/tmp/test_output/verification/round_1/error_proof_verify_structural.md",
+            additional_verify_rule_global_file="/tmp/human_help/additional_verify_rule_global.md",
+            additional_verify_rule_prev_round_file="",
         )
         check("proof_verify_structural.md renders OK", "test_problem.tex" in prompt)
         check("proof_verify_structural.md has Phase 1", "Phase 1" in prompt)
         check("proof_verify_structural.md has Phase 3", "Phase 3" in prompt)
-        check("proof_verify_structural.md has no Phase 4 section",
-              "### Phase 4" not in prompt and "## Phase 4" not in prompt)
+        check("proof_verify_structural.md has Phase 4", "Phase 4" in prompt)
     except Exception as e:
         check("proof_verify_structural.md renders OK", False, str(e))
 
@@ -158,7 +159,7 @@ async def run_smoke_test(config: dict, config_path: str | None = None) -> bool:
             error_file="/tmp/test_output/verification/round_1/error_proof_verify_detailed.md",
         )
         check("proof_verify_detailed.md renders OK", "test_problem.tex" in prompt)
-        check("proof_verify_detailed.md has Phase 4", "Phase 4" in prompt)
+        check("proof_verify_detailed.md has Phase 5", "Phase 5" in prompt)
         check("proof_verify_detailed.md references structural report",
               "test_structural_report.md" in prompt)
     except Exception as e:

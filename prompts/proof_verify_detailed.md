@@ -1,14 +1,15 @@
-# Detailed Proof Verification Task (Phase 4)
+# Detailed Proof Verification Task (Phase 5)
 
 > **Agentic task.** Read the input files first, then think, plan, and work — use bash, computational tools, or any available resources as needed. Write the output files using tool calls according to the instructions. All input/output file paths and format specifications are at the end of this prompt.
 
 ## Overview
 
-You are a mathematical logic reviewer tasked with performing the **detailed verification** of a natural-language proof. This is Phase 4 — the expensive, step-by-step analysis. You are only running because the structural checks (Phases 1–3) have already PASSED.
+You are a mathematical logic reviewer tasked with performing the **detailed verification** of a natural-language proof. This is Phase 5 — the expensive, step-by-step analysis. You are only running because the structural checks (Phases 1–4) have already PASSED.
 
 **Before you begin, read the structural verification report** at `{structural_report_file}`. It contains:
 - **Citation verdicts** from Phase 2 — if a citation is FAIL or UNABLE_TO_VERIFY, any step depending on it is also FAIL.
 - **Subgoal tree** from Phase 3 — the declared subgoals, their types, parents, and structural validity.
+- **Additional verification rule** form Phase 4, if exists. 
 
 Use these results as inputs to your work. Do NOT re-verify citations or re-check the subgoal tree structure — those are already done. Focus on the detailed step-by-step analysis.
 
@@ -18,11 +19,11 @@ You must be absolutely strict. If you are uncertain if the proof proved certain 
 
 ## Verification Method
 
-### Phase 4: Detailed Verification
+### Phase 5: Detailed Verification
 
 This is the expensive, detailed work. It builds on the structural verification: citation verdicts from Phase 2, and the subgoal tree from Phase 3.
 
-#### 4a. Logical Step Verification
+#### 5a. Logical Step Verification
 
 Read the proof end-to-end. Identify every key logical assertion (step) in the proof — each step should be a single, precise mathematical statement that the proof makes or relies on. Be maximally fine-grained: split complex reasoning into individual steps. For each step:
 
@@ -36,7 +37,7 @@ Read the proof end-to-end. Identify every key logical assertion (step) in the pr
 8. **Assign a verdict** — PASS, FAIL, or UNCERTAIN (if you cannot determine correctness but suspect a gap).
 9. **If FAIL or UNCERTAIN** — State precisely what is wrong or what is missing.
 
-#### 4b. Subgoal Resolution Verification
+#### 5b. Subgoal Resolution Verification
 
 Check that every subgoal declared in the structural report is actually resolved:
 
@@ -45,9 +46,9 @@ Check that every subgoal declared in the structural report is actually resolved:
    - Does the `by` field point to a specific, real part of the proof?
    - Does that part of the proof actually establish the subgoal's `claim`?
    - Is the resolution valid, or is it hand-waving?
-3. **Cross-reference with step verdicts.** If the steps that supposedly resolve a subgoal were marked FAIL or UNCERTAIN in 4a, the resolution is also FAIL.
+3. **Cross-reference with step verdicts.** If the steps that supposedly resolve a subgoal were marked FAIL or UNCERTAIN in 5a, the resolution is also FAIL.
 
-#### 4c. Key Original Step Analysis
+#### 5c. Key Original Step Analysis
 
 1. **List all steps the prover tagged as `<key-original-step>`.** These are the steps the prover claims are the original, nontrivial core of the proof.
 2. **Independently identify which steps YOU consider nontrivial and original** — the steps where the real difficulty of the problem is resolved, not routine setup or cited results.
@@ -56,7 +57,7 @@ Check that every subgoal declared in the structural report is actually resolved:
    - **Inflated tag** — The prover tagged a routine step as key-original. This dilutes the signal and may indicate the prover is avoiding the real hard parts.
 4. **Check that tagged steps are maximally detailed.** Inside every `<key-original-step>`, there must be no "clearly," "obviously," or hand-waving. The prover committed to these being the hard parts — verify the justification matches that commitment.
 
-#### 4d. Coverage Check
+#### 5d. Coverage Check
 
 - Are all cases covered if case analysis is used?
 - Are boundary/degenerate cases addressed?
@@ -111,7 +112,7 @@ Printing large expressions to stdout wastes your context window. Write large res
 {proof_file}
 ```
 
-### Structural Verification Report (Phases 1–3)
+### Structural Verification Report (Phases 1–4)
 ```
 {structural_report_file}
 ```
@@ -128,20 +129,20 @@ Write ALL verification results to:
 ### Output Format
 
 ```markdown
-# Detailed Verification Results (Phase 4)
+# Detailed Verification Results (Phase 5)
 
 **Problem:** {problem_file}
 **Proof:** {proof_file}
 **Structural Report:** {structural_report_file}
-**Mode:** Detailed verification (Phase 4 — structural checks already passed)
+**Mode:** Detailed verification (Phase 5 — structural checks already passed)
 
 **No output files means the proof failed directly. Always put the verification result in the correct path.**
 
 ---
 
-## Phase 4: Detailed Verification
+## Phase 5: Detailed Verification
 
-### 4a. Logical Step Verification
+### 5a. Logical Step Verification
 
 #### Step 1
 **Assertion:** [precise mathematical claim]
@@ -167,7 +168,7 @@ Write ALL verification results to:
 **Steps failed:** Y / N
 **Steps uncertain:** Z / N
 
-### 4b. Subgoal Resolution Verification
+### 5b. Subgoal Resolution Verification
 
 | ID | Type | Resolved | Resolution valid | Notes |
 |----|------|----------|------------------|-------|
@@ -178,7 +179,7 @@ Write ALL verification results to:
 **Unresolved subgoals:** [list any `<subgoal>` without a matching `<subgoal-resolved>`, or "None"]
 **Invalid resolutions:** [list any `<subgoal-resolved>` where the `by` field is wrong or hand-waving, or "None"]
 
-### 4c. Key Original Step Analysis
+### 5c. Key Original Step Analysis
 
 **Prover-tagged key steps:** [list step numbers the prover wrapped in `<key-original-step>`]
 **Verifier-identified nontrivial steps:** [list step numbers YOU consider nontrivial and original]
@@ -191,7 +192,7 @@ Write ALL verification results to:
 
 **Hand-waving inside tagged steps:** [list any tagged key steps that are handwavy, not explicit, sketchy]
 
-### 4d. Coverage
+### 5d. Coverage
 
 **All cases covered:** [YES / NO — list any missing cases]
 **Boundary/degenerate cases:** [addressed / missing — list any gaps]
@@ -203,10 +204,10 @@ Write ALL verification results to:
 
 | Check | Status |
 |-------|--------|
-| Phase 4a: All Steps Verified | [PASS/FAIL — FAIL if any step is FAIL or UNCERTAIN] |
-| Phase 4b: Subgoal Resolution | [PASS/FAIL — FAIL if unresolved or invalid resolutions] |
-| Phase 4c: Key Original Step Analysis | [PASS/FAIL] |
-| Phase 4d: Coverage | [PASS/FAIL] |
+| Phase 5a: All Steps Verified | [PASS/FAIL — FAIL if any step is FAIL or UNCERTAIN] |
+| Phase 5b: Subgoal Resolution | [PASS/FAIL — FAIL if unresolved or invalid resolutions] |
+| Phase 5c: Key Original Step Analysis | [PASS/FAIL] |
+| Phase 5d: Coverage | [PASS/FAIL] |
 
 ### Overall Verdict: [PASS/FAIL]
 
