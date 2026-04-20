@@ -1,3 +1,23 @@
+# --- Prover Mode Selection ---
+# Choose between "simple" (original iterative prover) or "decomposition" (step-by-step decomposition)
+prover:
+  mode: "simple"  # "simple" (default) or "decomposition"
+
+# --- Decomposition Prover Settings ---
+# Only used when prover.mode = "decomposition"
+decomposition:
+  max_prover_rounds: 5      # rounds per step before asking regulator
+  max_revisions: 3          # local revisions per decomposition step
+  max_decompositions: 3     # complete decomposition rewrites allowed
+
+  # Model selection for each agent (claude, codex, or gemini)
+  models:
+    decomposer: "claude"       # creates/revises proof decomposition
+    step_prover: "claude"      # proves individual steps
+    step_verifier: "claude"    # verifies step proofs
+    regulator: "claude"        # decides revise/rewrite/continue
+    proof_aggregator: "claude" # combines steps into final proof
+
 pipeline:
   max_proof_iterations: 9
 

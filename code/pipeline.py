@@ -2301,8 +2301,13 @@ async def main():
     # -------------------------------------------------------
     # Stage 1: Proof Search Loop
     # -------------------------------------------------------
+    prover_mode = config.get("prover", {}).get("mode", "simple")
+
     print("=" * 60)
-    if resume_from_step.startswith("parallel_"):
+    if prover_mode == "decomposition":
+        print("STAGE 1: Proof Search  [DECOMPOSITION MODE]")
+        print("  (Decomposition-based proving with step-by-step verification)")
+    elif resume_from_step.startswith("parallel_"):
         print(f"STAGE 1: Proof Search  [RESUMING round {start_round} from {resume_from_step}]")
     elif resume_from_step in ("verification", "detailed_verification"):
         print(f"STAGE 1: Proof Search  [RESUMING round {start_round} from {resume_from_step}]")
@@ -2310,21 +2315,52 @@ async def main():
         print(f"STAGE 1: Proof Search  [RESUMING from round {start_round}]")
     else:
         print("STAGE 1: Proof Search")
-    if multi_model_config:
+    if multi_model_config and prover_mode != "decomposition":
         print(f"  (Parallel mode: {', '.join(multi_model_config['providers'])})")
     print("=" * 60)
-    ok = await run_proof_loop(
-        output_dir, problem_file, claude_opts, prompts_dir,
-        max_proof, related_info_dir=related_info_dir,
-        proving_skill=proving_skill, tracker=tracker,
-        start_round=start_round,
-        resume_from_step=resume_from_step,
-        difficulty=difficulty,
-        multi_model_config=multi_model_config,
-        verification_providers=verification_providers,
-        config=config,
-        brainstorm_providers=brainstorm_providers if brainstorm_enabled else None,
-    )
+
+    if prover_mode == "decomposition":
+        # Use decomposition-based prover
+        from decomposition_prover import run_decomposition_prover
+
+        related_work_file = os.path.join(related_info_dir, "related_work.md")
+        difficulty_file = os.path.join(related_info_dir, "difficulty_evaluation.md")
+
+        proof_content = await run_decomposition_prover(
+            problem_file=problem_file,
+            related_work_file=related_work_file,
+            difficulty_file=difficulty_file,
+            output_dir=output_dir,
+            config=config,
+            prompts_dir=prompts_dir,
+            claude_opts=claude_opts,
+            logger=PipelineLogger(output_dir, "DecompositionProver"),
+            tracker=tracker,
+        )
+
+        # Decomposition prover writes proof.md directly
+        # Check if proof was generated successfully
+        proof_file = os.path.join(output_dir, "proof.md")
+        ok = os.path.exists(proof_file) and os.path.getsize(proof_file) > 0
+
+        if ok:
+            print(f"  Decomposition prover completed successfully")
+        else:
+            print(f"  Decomposition prover failed to produce a proof")
+    else:
+        # Use simple prover (existing logic)
+        ok = await run_proof_loop(
+            output_dir, problem_file, claude_opts, prompts_dir,
+            max_proof, related_info_dir=related_info_dir,
+            proving_skill=proving_skill, tracker=tracker,
+            start_round=start_round,
+            resume_from_step=resume_from_step,
+            difficulty=difficulty,
+            multi_model_config=multi_model_config,
+            verification_providers=verification_providers,
+            config=config,
+            brainstorm_providers=brainstorm_providers if brainstorm_enabled else None,
+        )
 
     # -------------------------------------------------------
     # Stage 2: Proof Effort Summary
