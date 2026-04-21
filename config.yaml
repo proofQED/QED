@@ -1,67 +1,12 @@
-# --- Prover Mode Selection ---
-# Choose between "simple" (original iterative prover) or "decomposition" (step-by-step decomposition)
-prover:
-  mode: "simple"  # "simple" (default) or "decomposition"
+# =============================================================================
+# QED Pipeline Configuration
+# =============================================================================
 
-# --- Decomposition Prover Settings ---
-# Only used when prover.mode = "decomposition"
-decomposition:
-  max_proof_attempts: 3    # REVISE_PROOF limit: proof attempts per revision
-  max_revisions: 2         # REVISE_PLAN limit: plan revisions per attempt
-  max_decompositions: 2    # REWRITE limit: total decomposition attempts
+# =============================================================================
+# MODEL PROVIDERS (used by both simple and decomposition modes)
+# =============================================================================
 
-  # Model selection for each agent (claude, codex, or gemini)
-  models:
-    decomposer: "codex"           # creates/revises proof decomposition plan
-    single_prover: "codex"        # executes decomposition plan, writes complete proof
-    regulator: "codex"            # decides REVISE_PROOF/REVISE_PLAN/REWRITE after verification fails
-    structural_verifier: "gemini" # structural verification of proof (Phases 1-5)
-    detailed_verifier: "gemini"   # detailed verification of proof (Phase 6)
-    verdict: "gemini"             # final verdict on verification reports (DONE/CONTINUE)
-
-pipeline:
-  max_proof_iterations: 9
-
-  # Multi-model parallel proof search.
-  # When enabled: listed providers run in parallel each round, with a selector
-  #   agent picking the best proof. Model selection is based solely on this config.
-  # When disabled: all problems use Claude only. No selector needed.
-  # Cost scales with number of providers: 2 providers = 2x proof search cost, 3 = 3x.
-  multi_model:
-    enabled: true               # true = use providers below, false = Claude-only
-    providers: ["claude"]        # any subset of ["claude", "codex", "gemini"]
-
-  # Multi-model verification.
-  # When enabled, each proof is independently verified by all listed providers.
-  # If ANY verifier's report says FAIL, the verdict is CONTINUE.
-  # Model selection is based solely on this config, independent of multi_model above.
-  # Cost scales linearly: 2 verifiers = 2x verification cost, 3 = 3x.
-  verification_agents:
-    enabled: true               # true = use providers below, false = Claude-only
-    providers: ["claude"]       # any subset of ["claude", "codex", "gemini"]
-
-  # Proof selection agent (only used when multi_model.enabled=true).
-  # Picks the best proof when multiple models generate proofs in parallel.
-  proof_select:
-    provider: "claude"           # Model for selection (claude/codex/gemini)
-
-  # Brainstorm session: multiple models independently brainstorm proof strategies
-  # before proof search each round. Results are shared with the proof search agent.
-  # Skipped for easy problems. Cost scales with number of providers.
-  brainstorm:
-    enabled: false              # true = run brainstorm before proof search
-    providers: ["claude"]       # any subset of ["claude", "codex", "gemini"]
-
-  # Literature survey agent (Stage 0).
-  # Evaluates problem difficulty and surveys related work before proof search.
-  literature_survey:
-    provider: "codex"           # Model for survey (claude/codex/gemini)
-
-  # Proof effort summary agent (Stage 2).
-  # Generates a summary of the entire proof journey after completion.
-  proof_summary:
-    provider: "codex"           # Model for summary (claude/codex/gemini)
-
+# --- Claude (Anthropic) ---
 claude:
   cli_path: "claude"
   permission_mode: "bypassPermissions"
@@ -86,17 +31,96 @@ claude:
     key: ""  # paste your Anthropic API key here
 
 # --- Codex (OpenAI) ---
-# Used for proof search (multi_model.providers) and/or verification (verification_agents.providers).
 codex:
   cli_path: "codex"
   model: "gpt-5.4"
   reasoning_effort: "xhigh"
 
 # --- Gemini (Google) ---
-# Used for proof search (multi_model.providers) and/or verification (verification_agents.providers).
 gemini:
   cli_path: "gemini"
   model: "gemini-3.1-pro-preview"  # or "gemini-3-flash-preview"
   approval_mode: "yolo"
   thinking_level: "HIGH"  # Gemini 3 thinking strength; for Gemini 2.5 use thinking_budget instead
-  api_key: ""  # paste your Google Gemini API key here, leave empty if Gemini CLI is already logged in with subscription     
+  api_key: ""  # paste your Google Gemini API key here, leave empty if Gemini CLI is already logged in with subscription
+
+# =============================================================================
+# PROVER MODE SELECTION
+# =============================================================================
+
+prover:
+  mode: "simple"  # "simple" (default) or "decomposition"
+
+# =============================================================================
+# PIPELINE SETTINGS
+# =============================================================================
+
+pipeline:
+  # -------------------------------------------------------------------------
+  # Shared settings (used by both simple and decomposition modes)
+  # -------------------------------------------------------------------------
+
+  # Literature survey agent (Stage 0).
+  # Evaluates problem difficulty and surveys related work before proof search.
+  literature_survey:
+    provider: "codex"  # claude, codex, or gemini
+
+  # Proof effort summary agent (Stage 2).
+  # Generates a summary of the entire proof journey after completion.
+  proof_summary:
+    provider: "codex"  # claude, codex, or gemini
+
+  # -------------------------------------------------------------------------
+  # Simple mode settings (only used when prover.mode = "simple")
+  # -------------------------------------------------------------------------
+
+  max_proof_iterations: 9
+
+  # Multi-model parallel proof search.
+  # When enabled: listed providers run in parallel each round, with a selector
+  #   agent picking the best proof. Model selection is based solely on this config.
+  # When disabled: all problems use Claude only. No selector needed.
+  # Cost scales with number of providers: 2 providers = 2x proof search cost, 3 = 3x.
+  multi_model:
+    enabled: true               # true = use providers below, false = Claude-only
+    providers: ["claude"]       # any subset of ["claude", "codex", "gemini"]
+
+  # Multi-model verification.
+  # When enabled, each proof is independently verified by all listed providers.
+  # If ANY verifier's report says FAIL, the verdict is CONTINUE.
+  # Model selection is based solely on this config, independent of multi_model above.
+  # Cost scales linearly: 2 verifiers = 2x verification cost, 3 = 3x.
+  verification_agents:
+    enabled: true               # true = use providers below, false = Claude-only
+    providers: ["claude"]       # any subset of ["claude", "codex", "gemini"]
+
+  # Proof selection agent (only used when multi_model.enabled=true).
+  # Picks the best proof when multiple models generate proofs in parallel.
+  proof_select:
+    provider: "claude"          # claude, codex, or gemini
+
+  # Brainstorm session: multiple models independently brainstorm proof strategies
+  # before proof search each round. Results are shared with the proof search agent.
+  # Skipped for easy problems. Cost scales with number of providers.
+  brainstorm:
+    enabled: false              # true = run brainstorm before proof search
+    providers: ["claude"]       # any subset of ["claude", "codex", "gemini"]
+
+# =============================================================================
+# DECOMPOSITION MODE SETTINGS (only used when prover.mode = "decomposition")
+# =============================================================================
+
+decomposition:
+  # Retry limits
+  max_proof_attempts: 3    # REVISE_PROOF limit: proof attempts per revision
+  max_revisions: 2         # REVISE_PLAN limit: total revisions per attempt (including original)
+  max_decompositions: 2    # REWRITE limit: total decomposition attempts
+
+  # Model selection for each agent (claude, codex, or gemini)
+  models:
+    decomposer: "codex"           # creates/revises proof decomposition plan
+    single_prover: "codex"        # executes decomposition plan, writes complete proof
+    regulator: "codex"            # decides REVISE_PROOF/REVISE_PLAN/REWRITE after verification fails
+    structural_verifier: "gemini" # structural verification of proof (Phases 1-5)
+    detailed_verifier: "gemini"   # detailed verification of proof (Phase 6)
+    verdict: "gemini"             # final verdict on verification reports (DONE/CONTINUE)
