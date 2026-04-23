@@ -99,6 +99,11 @@ pipeline:
   proof_select:
     provider: "codex"          # claude, codex, or gemini
 
+  # Verdict agent (used in both single and multi-model simple modes).
+  # Reads verification reports and returns DONE or CONTINUE.
+  verdict:
+    provider: "claude"          # claude, codex, or gemini
+
   # Brainstorm session: multiple models independently brainstorm proof strategies
   # before proof search each round. Results are shared with the proof search agent.
   # Skipped for easy problems. Cost scales with number of providers.

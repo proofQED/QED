@@ -863,10 +863,31 @@ async def run_agent_for_verdict(
     tools: list | None = None,
     tracker: TokenTracker | None = None,
     call_name: str = "",
+    *,
+    config: dict | None = None,
+    working_dir: str = "",
 ) -> str:
-    """Run agent and extract DONE/CONTINUE verdict from response."""
-    text = await run_agent(claude_opts, prompt, logger, tools=tools,
-                           tracker=tracker, call_name=call_name)
+    """Run agent and extract DONE/CONTINUE verdict from response.
+
+    When *config* is provided, dispatches to the provider specified by
+    ``pipeline.verdict.provider`` in the config (supports claude/codex/gemini).
+    Falls back to Claude-only when config is None.
+    """
+    if config is not None:
+        provider = config.get("pipeline", {}).get("verdict", {}).get("provider", "claude")
+        text = await run_auxiliary_agent(
+            provider=provider,
+            prompt=prompt,
+            working_dir=working_dir or claude_opts.get("cwd", "."),
+            config=config,
+            claude_opts=claude_opts,
+            logger=logger,
+            tracker=tracker,
+            call_name=call_name,
+        )
+    else:
+        text = await run_agent(claude_opts, prompt, logger, tools=tools,
+                               tracker=tracker, call_name=call_name)
     for line in reversed(text.strip().splitlines()):
         stripped = line.strip().upper()
         if stripped == "DONE":
@@ -1432,6 +1453,7 @@ async def _run_parallel_round(
         structural_decision = await run_agent_for_verdict(
             claude_opts, structural_verdict_prompt, logger,
             tracker=tracker, call_name=f"Structural Verdict R{i}",
+            config=config, working_dir=output_dir,
         )
         logger.log(f"Iteration {i}: Structural verdict = {structural_decision}")
         logger.append_history(f"Iteration {i}: Structural verdict = {structural_decision}")
@@ -1606,7 +1628,8 @@ async def _run_parallel_round(
             verification_result_file=files_list,
         )
     decision = await run_agent_for_verdict(claude_opts, verdict_prompt, logger,
-                                           tracker=tracker, call_name=f"Verdict R{i}")
+                                           tracker=tracker, call_name=f"Verdict R{i}",
+                                           config=config, working_dir=output_dir)
     logger.log(f"Iteration {i}: Decision is {decision}")
     logger.append_history(f"Iteration {i}: Decision = {decision}")
     return decision
@@ -1982,7 +2005,8 @@ async def run_proof_loop(
                         verification_result_file=files_list,
                     )
                 decision = await run_agent_for_verdict(claude_opts, verdict_prompt, logger,
-                                                       tracker=tracker, call_name=f"Verdict R{i}")
+                                                       tracker=tracker, call_name=f"Verdict R{i}",
+                                                       config=config, working_dir=output_dir)
 
             else:
                 # ==============================================================
@@ -2054,6 +2078,7 @@ async def run_proof_loop(
                     structural_decision = await run_agent_for_verdict(
                         claude_opts, structural_verdict_prompt, logger,
                         tracker=tracker, call_name=f"Structural Verdict R{i}",
+                        config=config, working_dir=output_dir,
                     )
                     logger.log(f"Iteration {i}: Structural verdict = {structural_decision}")
                     logger.append_history(f"Iteration {i}: Structural verdict = {structural_decision}")
@@ -2121,7 +2146,8 @@ async def run_proof_loop(
                         verification_result_file=files_list,
                     )
                 decision = await run_agent_for_verdict(claude_opts, verdict_prompt, logger,
-                                                       tracker=tracker, call_name=f"Verdict R{i}")
+                                                       tracker=tracker, call_name=f"Verdict R{i}",
+                                                       config=config, working_dir=output_dir)
 
             logger.log(f"Iteration {i}: Decision is {decision}")
             logger.append_history(f"Iteration {i}: Decision = {decision}")

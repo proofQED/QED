@@ -763,9 +763,9 @@ async def run_decomposer(
 See {state.decomp_dir}/attempt_*/revision_*/decomposition.yaml
 """
 
-    # Resolve human help file (global prover guidance from user)
-    project_root = os.path.dirname(prompts_dir)
-    human_help_file = os.path.join(project_root, "human_help", "additional_prove_human_help_global.md")
+    # Resolve human help file from output_dir (run.sh copies the global files
+    # there, and the UI edits them in-place).
+    human_help_file = os.path.join(state.output_dir, "human_help", "additional_prove_human_help_global.md")
 
     # Ensure revision directory exists for output
     revision_dir = state.get_revision_dir()
@@ -864,9 +864,9 @@ async def run_single_prover(
 
     model_provider = get_agent_model(config, "single_prover")
 
-    # Resolve human help file (global prover guidance from user)
-    project_root = os.path.dirname(prompts_dir)
-    human_help_file = os.path.join(project_root, "human_help", "additional_prove_human_help_global.md")
+    # Resolve human help file from output_dir (run.sh copies the global files
+    # there, and the UI edits them in-place).
+    human_help_file = os.path.join(state.output_dir, "human_help", "additional_prove_human_help_global.md")
 
     # Build the output path
     proof_dir = state.get_proof_dir()
@@ -1089,10 +1089,10 @@ async def run_structural_verification(
     error_file = os.path.join(proof_dir, "error_structural_verification.md")
     decomposition_file = os.path.join(state.get_revision_dir(), "decomposition.yaml")
 
-    # Global verification rules and prover guidance from human_help/
-    project_root = os.path.dirname(prompts_dir)
+    # Global verification rules from output_dir (run.sh copies the global files
+    # there, and the UI edits them in-place).
     additional_verify_rule_global_file = os.path.join(
-        project_root, "human_help", "additional_verify_rule_global.md"
+        state.output_dir, "human_help", "additional_verify_rule_global.md"
     )
 
     prompt = load_prompt(
