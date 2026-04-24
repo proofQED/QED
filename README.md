@@ -55,6 +55,98 @@ Model selection is **solely determined by configuration** — the `multi_model.p
 
 If the verdict is `DONE`, the pipeline stops. Otherwise the next round begins, with the proof search agent reading the previous round's verification feedback and proof status log to avoid repeating failed approaches.
 
+### Decomposition Mode (alternative to simple mode)
+
+When `prover.mode` is set to `"decomposition"` in `config.yaml`, the pipeline replaces the simple proof search loop (Stage 1) with a structured decomposition-based prover. Instead of one agent iterating on a single proof, five specialized agents collaborate through a plan-prove-verify-regulate cycle. This mode is designed for harder problems where a top-down decomposition into intermediate claims helps organize the proof effort.
+
+**Five agents, each independently configurable to use Claude, Codex, or Gemini:**
+
+| Agent | Config key | Role |
+|-------|-----------|------|
+| **Decomposer** | `decomposition.models.decomposer` | Creates a YAML proof plan — a DAG of intermediate claims from literature sources to the target |
+| **Single Prover** | `decomposition.models.single_prover` | Writes a complete proof following the decomposition plan |
+| **Structural Verifier** | `decomposition.models.structural_verifier` | Structural verification (Phases 1–5): problem integrity, completeness, citations, decomposition adherence, additional rules |
+| **Detailed Verifier** | `decomposition.models.detailed_verifier` | Detailed verification (Phase 6): step-by-step mathematical correctness of each decomposition step |
+| **Regulator** | `decomposition.models.regulator` | Analyzes verification failures and decides next action |
+| **Verdict** | `decomposition.models.verdict` | Returns DONE/CONTINUE based on verification reports |
+
+**The decomposition plan** is a structured YAML document containing:
+- `sources` — Known results from the literature survey that serve as building blocks, each with a `<cite>` block.
+- `steps` — Intermediate claims that chain from sources to the target. Each step has: an `id`, a precise quantitative `statement`, `inputs` (dependencies), `difficulty` rating, `is_key_step` flag, `rationale`, and `strategy_hint`.
+- `target` — The original conjecture, with `inputs` listing the final steps that prove it.
+- `proof_order` — Topological ordering for proving steps.
+- `key_steps` — IDs of the most novel/difficult steps, which the prover gives extra attention.
+- `self_critique` — The decomposer's own plausibility checks, contradiction checks, and difficulty assessment.
+
+The decomposer enforces a strict rule: every step must be a **rigorous quantitative mathematical statement**, not a vague description (e.g., "For all t > 0, E[e^{tX}] ≤ e^{t²σ²/2}" rather than "X has a thin tail").
+
+**Three-level retry hierarchy controlled by the Regulator:**
+
+The regulator agent analyzes verification failures and chooses one of three escalation levels:
+
+1. **REVISE_PROOF** — Keep the same decomposition plan, try a different proof execution. Used when the plan is sound but the prover made execution errors (computational mistakes, missed edge cases, hand-waving). Limited to `max_proof_attempts` per revision (default: 2).
+
+2. **REVISE_PLAN** — Modify the decomposition plan locally, then re-prove. Used when verification reveals structural gaps in the plan (missing intermediate claims, incorrect dependencies, overly ambitious steps). Limited to `max_revisions` per attempt (default: 2).
+
+3. **REWRITE** — Abandon the current proof strategy entirely and create a new decomposition from scratch. Used when the fundamental approach is flawed. Limited to `max_decompositions` total (default: 2).
+
+When a lower-level limit is exhausted, the system automatically escalates: exhausted proof attempts trigger a plan revision, exhausted revisions trigger a rewrite.
+
+**Pipeline flow:**
+
+```
+Decomposer (CREATE) → Single Prover → Structural Verifier → Verdict
+     ↑                                                        |
+     |                                   DONE ←───────────────┤
+     |                                                        |
+     |                                   CONTINUE ────────────┘
+     |                                        |
+     |                               Detailed Verifier → Verdict
+     |                                                    |
+     |                               DONE ←──────────────┤
+     |                                                    |
+     |                               CONTINUE ───────────┘
+     |                                     |
+     └──────────── Regulator ←─────────────┘
+                   (REVISE_PROOF / REVISE_PLAN / REWRITE)
+```
+
+When structural verification fails, the pipeline skips detailed verification entirely and goes straight to the regulator — there is no point doing expensive step-by-step analysis on a structurally unsound proof.
+
+**Resume support.** The decomposition prover has its own resume detection. It scans the `decomposition/` directory structure (attempt → revision → proof) and detects exactly where the previous run stopped: mid-decomposition, mid-proof, mid-verification (structural or detailed), or mid-regulation. It restores the full state (attempt/revision/proof counters, decomposition plan, attempt history) and continues from the exact interruption point.
+
+**Failure analysis.** When all retry limits are exhausted, the regulator runs in FINAL mode — it writes a comprehensive failure analysis (`decomposition/failure_analysis.md`) summarizing all attempts, the pattern of failures, and insights for human intervention.
+
+**Directory structure:**
+
+```
+<output>/decomposition/
+├── STATUS.md                              # Current state (attempt, revision, proof, activity)
+├── log.txt                                # Timeline log of all agent calls
+├── failure_analysis.md                    # Written when all limits exhausted
+├── attempt_1/
+│   ├── revision_1/
+│   │   ├── decomposition.yaml             # The proof plan
+│   │   ├── decomposer_response.md         # Raw decomposer output
+│   │   ├── proof_1/
+│   │   │   ├── proof.md                   # Complete proof
+│   │   │   ├── prover_response.md         # Raw prover output
+│   │   │   ├── scratchpad.md              # Prover's scratch work
+│   │   │   ├── structural_verification.md # Phases 1–5 report
+│   │   │   ├── detailed_verification.md   # Phase 6 report
+│   │   │   └── regulator_decision.md      # REVISE_PROOF / REVISE_PLAN / REWRITE
+│   │   └── proof_2/                       # After REVISE_PROOF
+│   │       └── ...
+│   └── revision_2/                        # After REVISE_PLAN
+│       ├── decomposition.yaml             # Revised plan
+│       └── proof_1/
+│           └── ...
+└── attempt_2/                             # After REWRITE
+    └── revision_1/
+        ├── decomposition.yaml             # Completely new strategy
+        └── ...
+```
+
 **Stage 2 — Proof Effort Summary.** After the proof loop finishes (either success or max iterations), a summary agent reads all generated files and writes `proof_effort_summary.md`.
 
 All agents receive `skill/super_math_skill.md` as a system-level instruction — a guide to mathematical proof methodology covering proof orientation, core strategies, stuck-recovery tactics, self-checking discipline, and computational tool usage. The proof search agent also receives the skill file path as an explicit input (`{skill_file}`) so it can reference the strategies directly.
@@ -116,18 +208,26 @@ proof_agent/
 ├── code/
 │   ├── pipeline.py                    # Main orchestrator (all stages, logging, token tracking)
 │   ├── model_runner.py                # Unified async wrappers for Claude, Codex, Gemini CLIs
+│   ├── decomposition_prover.py        # Decomposition-based prover (5-agent plan-prove-verify-regulate cycle)
 │   └── smoke_test.py                  # Validation (prompts, skills, connectivity for all enabled models)
 │
 ├── prompts/
 │   ├── literature_survey.md           # Stage 0: literature survey agent prompt
-│   ├── brainstorm.md                 # Stage 1: brainstorm session prompt (optional)
-│   ├── proof_search.md               # Stage 1: proof search agent prompt
-│   ├── proof_verify_structural.md    # Stage 1: structural verification prompt (Phases 1-4)
-│   ├── proof_verify_detailed.md      # Stage 1: detailed verification prompt (Phase 5)
-│   ├── proof_verify_easy.md          # Stage 1: lightweight verification prompt (easy)
-│   ├── proof_select.md              # Stage 1: selector agent prompt (multi-model only)
-│   ├── verdict_proof.md              # Stage 1: verdict agent prompt
-│   └── proof_effort_summary.md       # Stage 2: proof effort summary agent prompt
+│   ├── brainstorm.md                 # Stage 1 (simple): brainstorm session prompt (optional)
+│   ├── proof_search.md               # Stage 1 (simple): proof search agent prompt
+│   ├── proof_verify_structural.md    # Stage 1 (simple): structural verification prompt (Phases 1-4)
+│   ├── proof_verify_detailed.md      # Stage 1 (simple): detailed verification prompt (Phase 5)
+│   ├── proof_verify_easy.md          # Stage 1 (simple): lightweight verification prompt (easy)
+│   ├── proof_select.md              # Stage 1 (simple): selector agent prompt (multi-model only)
+│   ├── verdict_proof.md              # Stage 1 (simple): verdict agent prompt
+│   ├── proof_effort_summary.md       # Stage 2: proof effort summary agent prompt
+│   └── decomposition-prover/         # Stage 1 (decomposition mode) prompts
+│       ├── decomposition.md           #   Decomposer: CREATE / REVISE / REWRITE proof plans
+│       ├── single_prover.md           #   Single prover: writes complete proof from plan
+│       ├── proof_verify_structural.md #   Structural verification (Phases 1-5, decomposition-aware)
+│       ├── proof_verify_detailed.md   #   Detailed verification (Phase 6, step-by-step)
+│       ├── regulator.md               #   Regulator: REVISE_PROOF / REVISE_PLAN / REWRITE decisions
+│       └── verdict_proof.md           #   Verdict: STRUCTURAL or FINAL mode DONE/CONTINUE
 │
 ├── problem/
 │   └── problem.tex                    # Placeholder — put your problem statement here
@@ -155,6 +255,17 @@ Each prompt file in `prompts/` is a Markdown template with `{placeholder}` varia
 | `proof_select.md` | `problem_file`, `verification_reports_block`, `proof_claude`, `proof_codex`, `proof_gemini`, `selection_file`, `error_file` |
 | `verdict_proof.md` | `verification_result_file` |
 | `proof_effort_summary.md` | `output_dir`, `outcome`, `total_rounds`, `max_rounds`, `summary_file`, `error_file` |
+
+**Decomposition mode prompts** (in `prompts/decomposition-prover/`, filled at runtime by `decomposition_prover.py`):
+
+| Prompt | Placeholders |
+|--------|-------------|
+| `decomposition.md` | `mode`, `problem_file`, `related_work_file`, `difficulty_file`, `revision_context`, `problem_id`, `attempt_number`, `revision_number`, `timestamp`, `output_file`, `current_decomposition_file`, `verification_feedback`, `regulator_guidance`, `previous_proof_file`, `failure_history_file`, `human_help_file` |
+| `single_prover.md` | `problem_file`, `related_work_file`, `decomposition_file`, `human_help_file`, `previous_proof_file`, `previous_verification_file`, `output_file`, `output_dir`, `scratchpad_file` |
+| `proof_verify_structural.md` | `problem_file`, `proof_file`, `decomposition_file`, `output_file`, `error_file`, `output_dir`, `additional_verify_rule_global_file` |
+| `proof_verify_detailed.md` | `problem_file`, `proof_file`, `structural_report_file`, `decomposition_file`, `output_file`, `error_file`, `output_dir` |
+| `regulator.md` | `mode`, `state_file`, `decomposition_file`, `proof_file`, `verification_report`, `attempt_history`, `max_proof_attempts`, `max_revisions`, `max_decompositions`, `output_file` |
+| `verdict_proof.md` | `mode`, `structural_verification_file`, `detailed_verification_file` |
 
 Every prompt (except `verdict_proof.md`) includes an `error_file` placeholder. Agents are instructed to always create this file — empty if no errors occurred, or populated with error details if something went wrong. After every agent call, the pipeline checks that all expected output files exist (including the error log); if any are missing, the pipeline logs a fatal error and stops immediately.
 
@@ -553,6 +664,25 @@ pipeline:
     enabled: false              # true = run brainstorm session before proof search
     providers: ["claude"]       # any subset of ["claude", "codex", "gemini"]
 
+# --- Prover mode selection ---
+prover:
+  mode: "simple"                # "simple" (default) or "decomposition"
+
+# --- Decomposition mode settings (only used when prover.mode = "decomposition") ---
+decomposition:
+  max_proof_attempts: 2         # REVISE_PROOF limit: proof attempts per revision
+  max_revisions: 2              # REVISE_PLAN limit: plan revisions per attempt
+  max_decompositions: 2         # REWRITE limit: total decomposition attempts
+
+  # Model selection for each agent (claude, codex, or gemini)
+  models:
+    decomposer: "claude"        # creates/revises proof decomposition plan
+    single_prover: "claude"     # executes decomposition plan, writes complete proof
+    regulator: "claude"         # decides REVISE_PROOF / REVISE_PLAN / REWRITE
+    structural_verifier: "claude" # structural verification (Phases 1-5)
+    detailed_verifier: "claude" # detailed verification (Phase 6)
+    verdict: "claude"           # final verdict on verification reports (DONE/CONTINUE)
+
 claude:
   cli_path: "claude"
   permission_mode: "bypassPermissions"
@@ -598,39 +728,43 @@ This pipeline runs Claude CLI with `--dangerously-skip-permissions`. This means 
                                v
                   +------------------------+
                   |  Literature Survey      |   Stage 0
-                  |  Agent (Claude CLI)     |   (classifies difficulty,
+                  |  Agent                  |   (classifies difficulty,
                   +------------------------+    surveys related work)
                                |
                      related_info/ (2 files)
                                |
               +----------------+----------------+
               |                                 |
-        Single-model                       Multi-model
-              |                        (providers from config)
-              v                                 |
-    [Brainstorm (optional)]                     v
-              |                      [Brainstorm (optional)]
-              v                                 |
-    [3-step round:                              v
-     search → verify                 Proof Search (parallel)
-     → verdict]                      (any subset of Claude/Codex/Gemini)
-              |                                 |
-              |                      Verification (parallel)
-              |                      (N proofs × M verifiers)
-              |                                 |
-              |                          Selector Agent
-              |                     (skipped when single provider)
+        Simple mode                      Decomposition mode
+     (prover.mode="simple")           (prover.mode="decomposition")
               |                                 |
               v                                 v
-                          Verdict Agent
-                          (DONE / CONTINUE)
-                               |
-                    +----------+----------+
-                    |                     |
-                  DONE               CONTINUE
-                    |                     |
-                    v                     v
-              +----------+          next round
+   +--------------------+            +--------------------+
+   | Proof Search Loop   |            | Decomposer         |
+   | (single or multi-   |            | (CREATE/REVISE/     |
+   |  model, brainstorm) |            |  REWRITE)           |
+   +--------------------+            +--------------------+
+              |                                 |
+   +--------------------+            +--------------------+
+   | Verification        |            | Single Prover       |
+   | (single or multi-   |            +--------------------+
+   |  verifier)          |                      |
+   +--------------------+            +--------------------+
+              |                       | Structural Verifier |
+   +--------------------+            +--------------------+
+   | Selector Agent      |                      |
+   | (multi-model only)  |                  Verdict
+   +--------------------+              DONE /  CONTINUE
+              |                          |         |
+         Verdict Agent           Detailed     Regulator
+         (DONE/CONTINUE)         Verifier   (REVISE_PROOF/
+              |                      |       REVISE_PLAN/
+   +----------+----------+      Verdict      REWRITE)
+   |                     |    DONE/CONTINUE      |
+ DONE               CONTINUE     |          loops back
+   |                     |     DONE / -------> to Decomposer
+   v                     v                     or Prover
+              +----------+
               | Summary  |
               | Agent    |   Stage 2
               +----------+
@@ -643,22 +777,31 @@ This pipeline runs Claude CLI with `--dangerously-skip-permissions`. This means 
 flowchart TD
     A["problem.tex"] --> B["Literature Survey Agent<br/>Stage 0"]
     B --> C["related_info/ (2 files)"]
-    C --> D{"Multi-model?"}
+    C --> D{"Prover mode?"}
 
-    D -->|No| BS1["Brainstorm (optional)"]
-    BS1 --> I["Proof Search"]
-    I --> IV["Verification (direct)"]
-    IV --> J["Verdict Agent<br/>(DONE / CONTINUE)"]
-
-    D -->|Yes| BS2["Brainstorm (optional)"]
-    BS2 --> K["Proof Search (parallel)<br/>multiple providers"]
-    K --> O["Verification (parallel)<br/>N proofs × M verifiers"]
-    O --> P["Selector Agent<br/>(skipped when single provider)"]
-    P --> J
+    D -->|Simple| BS1["Brainstorm (optional)"]
+    BS1 --> I["Proof Search<br/>(single or multi-model)"]
+    I --> IV["Verification<br/>(single or multi-verifier)"]
+    IV --> P["Selector Agent<br/>(multi-model only)"]
+    P --> J["Verdict Agent<br/>(DONE / CONTINUE)"]
 
     J --> Q{"Verdict"}
     Q -->|DONE| R["Summary Agent<br/>Stage 2"]
     Q -->|CONTINUE| S["Next round"]
-    S --> D
+    S --> BS1
+
+    D -->|Decomposition| DC["Decomposer<br/>(CREATE / REVISE / REWRITE)"]
+    DC --> SP["Single Prover"]
+    SP --> SV["Structural Verifier<br/>(Phases 1-5)"]
+    SV --> V1{"Structural<br/>Verdict"}
+    V1 -->|DONE| DV["Detailed Verifier<br/>(Phase 6)"]
+    V1 -->|CONTINUE| REG["Regulator"]
+    DV --> V2{"Final<br/>Verdict"}
+    V2 -->|DONE| R
+    V2 -->|CONTINUE| REG
+    REG -->|REVISE_PROOF| SP
+    REG -->|REVISE_PLAN| DC
+    REG -->|REWRITE| DC
+
     R --> T["proof_effort_summary.md"]
 ```
