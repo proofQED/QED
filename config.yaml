@@ -55,7 +55,7 @@ gemini:
 # =============================================================================
 
 prover:
-  mode: "simple"  # "simple" (default) or "decomposition"
+  mode: "decomposition"  # "simple" (default) or "decomposition"
 
 
 
