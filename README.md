@@ -118,7 +118,7 @@ The proof cleverly combines probabilistic constructions with spectral analysis.
 
 **Workflow:** Minghao Pan provided the problem statement to QED with no further mathematical input. QED ran in decomposition mode and produced the correct proof through multiple rounds of refinement, including substantial changes of proof plan by the decomposition agent. The proof was verified by the expert.
 
-**Problems and proofs:** in /proved_statements in this github repo.
+**Problems and proofs:** in /proved_statements/prob-May-15-2026 in this github repo.
 
 <details>
 <summary><b>Expert comment (Minghao Pan)</b></summary>
@@ -141,7 +141,7 @@ where $\asymp$ denotes equality up to positive multiplicative constants.
 
 **Workflow:** Minghao Pan provided the problem statement to QED with no further mathematical input. QED ran in decomposition mode and produced the correct proof through multiple rounds of refinement, including substantial changes of proof plan by the decomposition agent. The proof was verified by the expert.
 
-**Problems and proofs:** in /proved_statements in this repo.
+**Problems and proofs:** in /proved_statements/prob-May-15-2026 in this repo.
 
 <details>
 <summary><b>Expert comment (Minghao Pan)</b></summary>
