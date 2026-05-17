@@ -265,8 +265,24 @@ def is_pipeline_complete(output_dir: str) -> bool:
 
 
 def proof_succeeded(output_dir: str) -> bool:
-    """True if a final top-level ``proof.md`` exists with content."""
-    return file_nonempty(os.path.join(output_dir, "proof.md"))
+    """True if the decomposition loop has produced a verified ``proof.md``.
+
+    A non-empty ``proof.md`` alone is NOT sufficient: the file can be a
+    fallback write, an intermediate per-revision write, or a stale leftover
+    from a prior run. The decomposition loop is only "done" when its
+    ``STATUS.md`` reaches ``COMPLETED``. The Easy short-circuit (survey agent
+    writes ``proof.md`` and the pipeline exits before invoking the
+    decomposition prover) is also treated as success — recognized by a
+    non-empty ``proof.md`` together with the absence of any decomposition
+    directory.
+    """
+    if not file_nonempty(os.path.join(output_dir, "proof.md")):
+        return False
+    decomp_status_path = os.path.join(decomp_root(output_dir), "STATUS.md")
+    if not os.path.exists(decomp_status_path):
+        # No decomposition stage at all — Easy short-circuit.
+        return True
+    return parse_status_md(output_dir).get("state", "").upper() == "COMPLETED"
 
 
 def decomp_failed(output_dir: str) -> bool:
