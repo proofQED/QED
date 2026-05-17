@@ -111,7 +111,7 @@ decomposition:
       reasoning_effort: "xhigh"
     single_prover:
       provider: "codex"           # executes decomposition plan, writes complete proof
-      model: "gpt-5.5-pro"
+      model: "gpt-5.5"
       reasoning_effort: "xhigh"
     regulator:
       provider: "codex"           # decides REVISE_PROOF/REVISE_PLAN/REWRITE after verification fails
