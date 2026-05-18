@@ -31,7 +31,32 @@ QED is a multi-agent pipeline that takes a mathematical problem statement in LaT
 
 ## Math Research Problems Solved by QED, Verified by Domain Experts
 
-### 1. Return Probability Asymptotics for Lamplighter Walk on $\mathbb{Z}_2 \wr T_d$ (Probability Theory)
+### 1. Local Invariant Cycle Theorem over Integers for $H^1$ (Algebraic Geometry)
+
+**Domain:** Algebraic geometry, Hodge theory, monodromy, cohomology of degenerations.
+
+**What QED solved:** The invariant cycle theorem (Clemens-Schmid, 1970s) states that for a semistable family of complex projective varieties, the invariant class on a nearby smooth fiber extends to the total space. This was known over $\mathbb{Q}$ but open over $\mathbb{Z}$. In February 2026, Arapura-Greer-Zhang showed the integral version fails for $H^2$. QED proved that the integral version **holds for $H^1$**: for a one-parameter family $X \to B$ over a disk with simple normal crossing central fiber, the restriction map $H^1(X, \mathbb{Z}) \to H^1(X_t, \mathbb{Z})^T$ to the monodromy-invariant submodule is surjective. **AI's proof (April 25, 2026) was produced before the human proof was released on public (May 15, 2026 in the paper [arXiv:2602.07302](https://arxiv.org/abs/2602.07302)), but is after the time when the human proof was found. AI's work is independent and mathematically different from human experts' proof.** This problem statement is regarded as moderate difficult by the expert.
+
+**Expert:** Yilong Zhang, Limited Term Assistant Professor in the Department of Mathematics at the University of Georgia,one of the authors of [arXiv:2602.07302](https://arxiv.org/abs/2602.07302).
+
+**Workflow:** Chenyang An ran QED in decomposition mode. QED produced the proof through 1 plan, 2 revisions, and 7 attempted proofs in total. The proof was verified by Professor Yilong Zhang.
+
+**Problems and proofs:** [`proved_statements/algberaicgeometry-May-17-2026/`](proved_statements/algberaicgeometry-May-17-2026/)
+
+<details>
+<summary><b>Expert comment (Yilong Zhang)</b></summary>
+
+"The method in AI's proof that interprets the coboundary map $H^1(X^*) \to H^2(X, X^*)$ as the residue map is **original**. This actually holds in higher degrees by working with Griffiths' residue, but in degree one, this interpretation is the classical residue and is particularly useful for LICT$_\mathbb{Z}$, since one has the key lemma which is essential in the proof."
+
+"The proof is **elementary and elegant**. (The first lemma is essentially residue theory in complex analysis, and the second is essentially reduced to Picard-Lefschetz theory for curves.) It provides a different point of view on the integral version of the invariant cycle theorem in degree one."
+
+See the [full expert comments](proved_statements/algberaicgeometry-May-17-2026/README.md#expert-comments-from-professor-yilong-zhang) for complete details.
+
+</details>
+
+---
+
+### 2. Return Probability Asymptotics for Lamplighter Walk on $\mathbb{Z}_2 \wr T_d$ (Probability Theory)
 
 **Domain:** Probability theory, random walks on groups, lamplighter random walks, spectral analysis.
 
@@ -54,7 +79,7 @@ This is a research-level open question in probability theory. Without human math
 
 ---
 
-### 2. Total Variation Asymptotics for Switch-Walk-Switch on $\mathbb{Z}_2 \wr \mathbb{Z}$ (Probability Theory)
+### 3. Total Variation Asymptotics for Switch-Walk-Switch on $\mathbb{Z}_2 \wr \mathbb{Z}$ (Probability Theory)
 
 **Domain:** Probability theory, random walks on groups, lamplighter random walks, total variation distance.
 
@@ -77,7 +102,7 @@ This is a technically nontrivial PhD-level problem in probability theory. Withou
 
 ---
 
-### 3. Nonexistence Result for Critical Transport Equation (Applied Analysis / Fluid PDE)
+### 4. Nonexistence Result for Critical Transport Equation (Applied Analysis / Fluid PDE)
 
 **Domain:** Applied analysis, fluid mixing, critical transport equations.
 
@@ -104,7 +129,7 @@ See the [full expert comments](proved_statements/analysis-Apr-24-2026/README.md#
 
 ---
 
-### 4. Equivalence of Batchelor Scale Condition for Shear Flow (Applied Analysis / Fluid PDE)
+### 5. Equivalence of Batchelor Scale Condition for Shear Flow (Applied Analysis / Fluid PDE)
 
 **Domain:** Applied analysis, fluid PDE, advection-diffusion equations, turbulence theory, Batchelor scale.
 
@@ -131,7 +156,7 @@ See the [full expert comments](proved_statements/analysis-Apr-24-2026/README.md#
 
 ---
 
-### 5. Carleman Weight Function Construction (Inverse Problems / PDE)
+### 6. Carleman Weight Function Construction (Inverse Problems / PDE)
 
 **Domain:** Inverse problems, Carleman estimates, wave equations on half-infinite domains.
 
